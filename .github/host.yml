@@ -1,0 +1,8 @@
+render_api='rnd_axEfWyMPi1bVwTdvzRhcHzT7v4nE'
+LMS Render Service ID = 'srv-d00cc4fgi27c73b4uco0'
+LMS django SECRET_KEY = 'django-insecure-4#geugrr0#u!1$%lu3(gv&on7#hl6xhzd3cdc)-xlr!l70%dz&'
+LMS Render API_BASE_URL = 'https://complete-lms-api.onrender.com'
+
+VERCEL_ACCESS_TOKEN =  '6G4iqTLUUVHEbuvuFJUkTcaJ'
+lms VERCEL_PROJECT_ID = 'prj_HHw9qyLqdjpNHC1D0FFKfIXnIicz'
+VERCEL_ORG_ID  =  'team_5NHyiY5Zq3kVvowhmv8Hxaxm'
