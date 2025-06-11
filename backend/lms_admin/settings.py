@@ -181,10 +181,10 @@ CORS_ALLOW_HEADERS = [
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'complete_lms_db_e007',
-        'USER': 'complete_lms_db_e007_user',
-        'PASSWORD': 'rqcls0H9A6jJQnOIcMZJ1E4HBxBSnpSa',
-        'HOST': 'dpg-d04h5cq4d50c73a6f840-a.oregon-postgres.render.com',
+        'NAME': 'complete_lms_db_1ose',
+        'USER': 'complete_lms_db_1ose_user',
+        'PASSWORD': '30VjYWp1EzisMmeNfW10MrcG4ObctZgT',
+        'HOST': 'dpg-d14mqc49c44c738a27k0-a.oregon-postgres.render.com',
         'PORT': '5432',
     }
 }
