@@ -1,0 +1,30 @@
+[
+    {
+      "id": "classic",
+      "name": "Classic",
+      "thumbnail": "/templates/classic.jpg",
+      "defaultBackground": "#fff9e6",
+      "defaultBorder": "#f1c40f"
+    },
+    {
+      "id": "modern",
+      "name": "Modern",
+      "thumbnail": "/templates/modern.jpg",
+      "defaultBackground": "#f0f8ff",
+      "defaultBorder": "#3498db"
+    },
+    {
+      "id": "elegant",
+      "name": "Elegant",
+      "thumbnail": "/templates/elegant.jpg",
+      "defaultBackground": "#f9f0ff",
+      "defaultBorder": "#9b59b6"
+    },
+    {
+      "id": "minimal",
+      "name": "Minimal",
+      "thumbnail": "/templates/minimal.jpg",
+      "defaultBackground": "#ffffff",
+      "defaultBorder": "#2c3e50"
+    }
+  ]

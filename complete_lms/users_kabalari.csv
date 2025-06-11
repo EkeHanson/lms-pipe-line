@@ -1,0 +1,13 @@
+firstName,lastName,email,password,role
+Adoga,Okpani,adoga.okpani@example.com,Password123!,owner
+Onoja,Achema,onoja.achema@example.com,Password123!,learner
+Owoicho,Ogbole,owoicho.ogbole@example.com,Password123!,instructor
+Ehi,Onuh,ehi.onuh@example.com,Password123!,learner
+Ojima,Abutu,ojima.abutu@example.com,Password123!,admin
+Eje,Onoja,eje.onoja@example.com,Password123!,owner
+Ojoma,Adoga,ojoma.adoga@example.com,Password123!,learner
+Amedu,Okopi,amedu.okopi@example.com,Password123!,instructor
+Enejoh,Ikwue,enejoh.ikwue@example.com,Password123!,learner
+Onyilo,Agbo,onyilo.agbo@example.com,Password123!,admin
+Alekwu,Omale,alekwuu.omale@example.com,Password123!,owner
+Okopi,Ocheje,okopi.ocheje@example.com,Password123!,learner

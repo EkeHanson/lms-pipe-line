@@ -1,0 +1,4641 @@
+
+
+// === File: AssessmentSampling.jsx ===
+import React, { useState } from 'react';
+import {
+  Box, Typography, Table, TableBody, TableCell, TableContainer,
+  TableHead, TableRow, Paper, Chip, TextField, Button,
+  Select, MenuItem, FormControl, InputLabel, Checkbox, Grid,
+  IconButton, Tooltip, InputAdornment, Dialog, DialogTitle,
+  DialogContent, DialogActions, Divider, LinearProgress,
+  Tab, Tabs, Card, CardContent, Avatar, List, ListItem,
+  ListItemAvatar, ListItemText, Badge, Menu, Snackbar, Alert
+} from '@mui/material';
+import {
+  Search, FilterList, FileCopy, BarChart, Refresh, 
+  Visibility, Close, Assessment, Person, CalendarToday, 
+  Check, Clear, ArrowBack, Download, Share,
+  Warning, Error, CheckCircle, PieChart, Timeline
+} from '@mui/icons-material';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import html2canvas from 'html2canvas';
+import { saveAs } from 'file-saver';
+
+// Sample data
+const assessmentData = [
+  {
+    id: 1,
+    course: 'Health and Safety Level 2',
+    trainer: 'John Smith',
+    trainerAvatar: '/avatars/1.jpg',
+    date: '2023-06-10',
+    sampleSize: 5,
+    sampled: 3,
+    passRate: 80,
+    status: 'completed',
+    flagged: false,
+    details: {
+      totalLearners: 15,
+      averageScore: 78,
+      gradingCriteria: [
+        { criterion: 'Knowledge', weight: 40, average: 82 },
+        { criterion: 'Practical Skills', weight: 30, average: 75 },
+        { criterion: 'Safety Awareness', weight: 30, average: 85 }
+      ],
+      sampledAssessments: [
+        { id: 'A101', learner: 'Emma Watson', score: 85, passed: true, avatar: '/avatars/11.jpg' },
+        { id: 'A102', learner: 'Daniel Radcliffe', score: 72, passed: true, avatar: '/avatars/12.jpg' },
+        { id: 'A103', learner: 'Rupert Grint', score: 65, passed: false, avatar: '/avatars/13.jpg' }
+      ],
+      comments: [
+        { user: 'Quality Auditor', date: '2023-06-11', text: 'Good overall performance, but practical skills need improvement' },
+        { user: 'Trainer', date: '2023-06-12', text: 'Will conduct refresher session on manual handling techniques' }
+      ]
+    },
+    analysis: {
+      scoreDistribution: [
+        { range: '90-100%', count: 2 },
+        { range: '80-89%', count: 5 },
+        { range: '70-79%', count: 4 },
+        { range: '60-69%', count: 3 },
+        { range: 'Below 60%', count: 1 }
+      ],
+      comparison: {
+        previousAverage: 72,
+        departmentAverage: 75,
+        benchmark: 80
+      },
+      recommendations: [
+        'Provide additional practical training',
+        'Review assessment criteria for consistency',
+        'Monitor learners with scores below 70%'
+      ]
+    }
+  },
+  {
+    id: 2,
+    course: 'First Aid at Work',
+    trainer: 'Sarah Johnson',
+    trainerAvatar: '/avatars/2.jpg',
+    date: '2023-06-12',
+    sampleSize: 8,
+    sampled: 5,
+    passRate: 60,
+    status: 'completed',
+    flagged: true,
+    details: {
+      totalLearners: 20,
+      averageScore: 65,
+      gradingCriteria: [
+        { criterion: 'Theory', weight: 50, average: 70 },
+        { criterion: 'Practical', weight: 50, average: 60 }
+      ],
+      sampledAssessments: [
+        { id: 'A201', learner: 'Tom Hanks', score: 80, passed: true, avatar: '/avatars/21.jpg' },
+        { id: 'A202', learner: 'Meryl Streep', score: 55, passed: false, avatar: '/avatars/22.jpg' },
+        { id: 'A203', learner: 'Leonardo DiCaprio', score: 62, passed: false, avatar: '/avatars/23.jpg' }
+      ],
+      comments: [
+        { user: 'Quality Auditor', date: '2023-06-13', text: 'Practical assessment scores significantly lower than theory' }
+      ]
+    },
+    analysis: {
+      scoreDistribution: [
+        { range: '90-100%', count: 1 },
+        { range: '80-89%', count: 3 },
+        { range: '70-79%', count: 5 },
+        { range: '60-69%', count: 6 },
+        { range: 'Below 60%', count: 5 }
+      ],
+      comparison: {
+        previousAverage: 68,
+        departmentAverage: 70,
+        benchmark: 75
+      },
+      recommendations: [
+        'Review practical assessment criteria',
+        'Provide additional hands-on practice sessions',
+        'Consider trainer coaching'
+      ]
+    }
+  }
+];
+
+const statusOptions = ['all', 'pending', 'in_progress', 'completed'];
+const statusMap = {
+  pending: { label: 'Pending', color: 'default' },
+  in_progress: { label: 'In Progress', color: 'warning' },
+  completed: { label: 'Completed', color: 'success' }
+};
+
+const PassFailBadge = ({ passed }) => (
+  passed ? (
+    <Badge badgeContent={<Check fontSize="small" />} color="success" />
+  ) : (
+    <Badge badgeContent={<Clear fontSize="small" />} color="error" />
+  )
+);
+
+export default function AssessmentSampling() {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [selected, setSelected] = useState([]);
+  const [samplingPercentage, setSamplingPercentage] = useState(30);
+  const [viewAssessment, setViewAssessment] = useState(null);
+  const [analyzeAssessment, setAnalyzeAssessment] = useState(null);
+  const [tabValue, setTabValue] = useState(0);
+  const [exportAnchorEl, setExportAnchorEl] = useState(null);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+
+  const filteredData = assessmentData.filter(assessment => {
+    const matchesSearch = assessment.course.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         assessment.trainer.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === 'all' || assessment.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  const handleSelectAll = (event) => {
+    if (event.target.checked) {
+      const newSelected = filteredData.map((n) => n.id);
+      setSelected(newSelected);
+      return;
+    }
+    setSelected([]);
+  };
+
+  const handleSelect = (id) => {
+    const selectedIndex = selected.indexOf(id);
+    let newSelected = [];
+
+    if (selectedIndex === -1) {
+      newSelected = newSelected.concat(selected, id);
+    } else if (selectedIndex === 0) {
+      newSelected = newSelected.concat(selected.slice(1));
+    } else if (selectedIndex === selected.length - 1) {
+      newSelected = newSelected.concat(selected.slice(0, -1));
+    } else if (selectedIndex > 0) {
+      newSelected = newSelected.concat(
+        selected.slice(0, selectedIndex),
+        selected.slice(selectedIndex + 1)
+      );
+    }
+
+    setSelected(newSelected);
+  };
+
+  const isSelected = (id) => selected.indexOf(id) !== -1;
+
+  const handleSampling = () => {
+    alert(`Sampling ${samplingPercentage}% of ${selected.length} selected assessments`);
+  };
+
+  const handleViewDetails = (assessment) => {
+    setViewAssessment(assessment);
+    setTabValue(0);
+  };
+
+  const handleAnalyze = (assessment) => {
+    setAnalyzeAssessment(assessment);
+    setTabValue(0);
+  };
+
+  const handleCloseDialog = () => {
+    setViewAssessment(null);
+    setAnalyzeAssessment(null);
+  };
+
+  const handleTabChange = (event, newValue) => {
+    setTabValue(newValue);
+  };
+
+  const handleExportClick = (event) => {
+    setExportAnchorEl(event.currentTarget);
+  };
+
+  const handleExportClose = () => {
+    setExportAnchorEl(null);
+  };
+
+  const exportPDF = (contentId, fileName) => {
+    const input = document.getElementById(contentId);
+    html2canvas(input).then((canvas) => {
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgProps = pdf.getImageProperties(imgData);
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`${fileName}.pdf`);
+      setSnackbar({ open: true, message: 'PDF exported successfully', severity: 'success' });
+    }).catch(err => {
+      setSnackbar({ open: true, message: 'Failed to export PDF', severity: 'error' });
+      console.error('PDF export error:', err);
+    });
+  };
+
+  const exportCSV = (data, fileName) => {
+    try {
+      let csvContent = "data:text/csv;charset=utf-8,";
+      
+      // Add headers
+      const headers = Object.keys(data[0]);
+      csvContent += headers.join(",") + "\r\n";
+      
+      // Add data
+      data.forEach(item => {
+        const row = headers.map(header => {
+          // Handle nested objects
+          if (typeof item[header] === 'object') {
+            return JSON.stringify(item[header]);
+          }
+          return `"${item[header]}"`;
+        }).join(",");
+        csvContent += row + "\r\n";
+      });
+      
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `${fileName}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setSnackbar({ open: true, message: 'CSV exported successfully', severity: 'success' });
+    } catch (err) {
+      setSnackbar({ open: true, message: 'Failed to export CSV', severity: 'error' });
+      console.error('CSV export error:', err);
+    }
+  };
+
+  const handleExportDetails = (format) => {
+    handleExportClose();
+    if (!viewAssessment) return;
+
+    if (format === 'pdf') {
+      exportPDF('details-content', `Assessment-Details-${viewAssessment.course.replace(/\s+/g, '-')}`);
+    } else if (format === 'csv') {
+      const csvData = [
+        { 
+          Course: viewAssessment.course,
+          Trainer: viewAssessment.trainer,
+          Date: viewAssessment.date,
+          'Sample Size': `${viewAssessment.sampled}/${viewAssessment.sampleSize}`,
+          'Pass Rate': `${viewAssessment.passRate}%`,
+          'Average Score': `${viewAssessment.details.averageScore}%`
+        },
+        ...viewAssessment.details.sampledAssessments.map(item => ({
+          'Learner ID': item.id,
+          Learner: item.learner,
+          Score: `${item.score}%`,
+          Status: item.passed ? 'Passed' : 'Failed'
+        }))
+      ];
+      exportCSV(csvData, `Assessment-Details-${viewAssessment.course.replace(/\s+/g, '-')}`);
+    }
+  };
+
+  const handleExportAnalysis = (format) => {
+    handleExportClose();
+    if (!analyzeAssessment) return;
+
+    if (format === 'pdf') {
+      exportPDF('analysis-content', `Assessment-Analysis-${analyzeAssessment.course.replace(/\s+/g, '-')}`);
+    } else if (format === 'csv') {
+      const csvData = [
+        { 
+          Metric: 'Average Score', 
+          Value: `${analyzeAssessment.details.averageScore}%`,
+          Comparison: `Previous: ${analyzeAssessment.analysis.comparison.previousAverage}%`
+        },
+        { 
+          Metric: 'Pass Rate', 
+          Value: `${analyzeAssessment.passRate}%`,
+          Comparison: `Department: ${analyzeAssessment.analysis.comparison.departmentAverage}%`
+        },
+        { 
+          Metric: 'Benchmark', 
+          Value: `${analyzeAssessment.analysis.comparison.benchmark}%`,
+          Comparison: ''
+        },
+        ...analyzeAssessment.analysis.recommendations.map((rec, index) => ({
+          Metric: `Recommendation ${index + 1}`,
+          Value: rec,
+          Comparison: ''
+        }))
+      ];
+      exportCSV(csvData, `Assessment-Analysis-${analyzeAssessment.course.replace(/\s+/g, '-')}`);
+    }
+  };
+
+  return (
+    <Box sx={{ p: 3 }}>
+      {/* Main Table View */}
+      <Typography variant="h5" gutterBottom sx={{ mb: 3 }}>
+        Assessment Sampling
+      </Typography>
+      
+      {/* Search and Filter Controls */}
+      <Grid container spacing={2} sx={{ mb: 3 }}>
+        <Grid item xs={12} md={6}>
+          <TextField
+            fullWidth
+            size="small"
+            placeholder="Search assessments..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Search />
+                </InputAdornment>
+              ),
+            }}
+          />
+        </Grid>
+        <Grid item xs={6} md={3}>
+          <FormControl fullWidth size="small">
+            <InputLabel>Status</InputLabel>
+            <Select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              label="Status"
+            >
+              {statusOptions.map((option) => (
+                <MenuItem key={option} value={option}>
+                  {option === 'all' ? 'All Statuses' : statusMap[option].label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Grid>
+        <Grid item xs={6} md={3}>
+          <Button
+            fullWidth
+            variant="outlined"
+            startIcon={<FilterList />}
+            onClick={() => alert('Advanced filters coming soon')}
+          >
+            Filters
+          </Button>
+        </Grid>
+      </Grid>
+      
+      {/* Action Bar */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Typography variant="subtitle1">
+          {selected.length > 0 ? `${selected.length} selected` : `${filteredData.length} assessments`}
+        </Typography>
+        
+        <Box>
+          <Tooltip title="Refresh Data">
+            <IconButton sx={{ mr: 1 }}>
+              <Refresh />
+            </IconButton>
+          </Tooltip>
+          <FormControl size="small" sx={{ width: 120, mr: 1 }}>
+            <InputLabel>Sample %</InputLabel>
+            <Select
+              value={samplingPercentage}
+              onChange={(e) => setSamplingPercentage(e.target.value)}
+              label="Sample %"
+            >
+              {[10, 20, 30, 40, 50].map((percent) => (
+                <MenuItem key={percent} value={percent}>{percent}%</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<FileCopy />}
+            onClick={handleSampling}
+            disabled={selected.length === 0}
+          >
+            Sample Selected
+          </Button>
+        </Box>
+      </Box>
+      
+      {/* Assessments Table */}
+      <TableContainer component={Paper} elevation={2}>
+        <Table>
+          <TableHead>
+            <TableRow sx={{ backgroundColor: 'primary.light' }}>
+              <TableCell padding="checkbox">
+                <Checkbox
+                  color="primary"
+                  indeterminate={selected.length > 0 && selected.length < filteredData.length}
+                  checked={filteredData.length > 0 && selected.length === filteredData.length}
+                  onChange={handleSelectAll}
+                />
+              </TableCell>
+              <TableCell>Course</TableCell>
+              <TableCell>Trainer</TableCell>
+              <TableCell align="center">Date</TableCell>
+              <TableCell align="center">Sample Size</TableCell>
+              <TableCell align="center">Sampled</TableCell>
+              <TableCell align="center">Pass Rate</TableCell>
+              <TableCell align="center">Status</TableCell>
+              <TableCell align="center">Actions</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {filteredData.map((row) => {
+              const isItemSelected = isSelected(row.id);
+              return (
+                <TableRow
+                  key={row.id}
+                  hover
+                  selected={isItemSelected}
+                  sx={row.flagged ? { backgroundColor: 'error.light' } : {}}
+                >
+                  <TableCell padding="checkbox">
+                    <Checkbox
+                      color="primary"
+                      checked={isItemSelected}
+                      onChange={() => handleSelect(row.id)}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      {row.flagged && <Warning color="error" sx={{ mr: 1 }} />}
+                      {row.course}
+                    </Box>
+                  </TableCell>
+                  <TableCell>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <Avatar src={row.trainerAvatar} sx={{ width: 24, height: 24, mr: 1 }} />
+                      {row.trainer}
+                    </Box>
+                  </TableCell>
+                  <TableCell align="center">{row.date}</TableCell>
+                  <TableCell align="center">{row.sampleSize}</TableCell>
+                  <TableCell align="center">
+                    {row.sampled}/{row.sampleSize}
+                  </TableCell>
+                  <TableCell align="center">
+                    <Box sx={{ 
+                      color: row.passRate >= 70 ? 'success.main' : row.passRate >= 50 ? 'warning.main' : 'error.main',
+                      fontWeight: 'bold'
+                    }}>
+                      {row.passRate > 0 ? `${row.passRate}%` : '-'}
+                    </Box>
+                  </TableCell>
+                  <TableCell align="center">
+                    <Chip
+                      label={statusMap[row.status].label}
+                      color={statusMap[row.status].color}
+                      size="small"
+                    />
+                  </TableCell>
+                  <TableCell align="center">
+                    <Tooltip title="View Details">
+                      <IconButton 
+                        size="small" 
+                        onClick={() => handleViewDetails(row)}
+                        color="primary"
+                      >
+                        <Visibility fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Analyze">
+                      <IconButton 
+                        size="small" 
+                        onClick={() => handleAnalyze(row)}
+                        color="secondary"
+                      >
+                        <BarChart fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </TableContainer>
+
+      {/* View Details Dialog */}
+      <Dialog
+        open={!!viewAssessment}
+        onClose={handleCloseDialog}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        <DialogTitle sx={{ bgcolor: 'primary.main', color: 'white' }}>
+          <Box display="flex" alignItems="center">
+            <IconButton onClick={handleCloseDialog} sx={{ color: 'white', mr: 1 }}>
+              <ArrowBack />
+            </IconButton>
+            Assessment Details: {viewAssessment?.course}
+          </Box>
+        </DialogTitle>
+        <DialogContent dividers sx={{ p: 0 }}>
+          {viewAssessment && (
+            <Box id="details-content">
+              {/* Header with key info */}
+              <Box sx={{ p: 3, bgcolor: 'grey.50' }}>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={6}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                      <Avatar src={viewAssessment.trainerAvatar} sx={{ mr: 2 }} />
+                      <Box>
+                        <Typography variant="subtitle1">Trainer</Typography>
+                        <Typography variant="h6">{viewAssessment.trainer}</Typography>
+                      </Box>
+                    </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                      <CalendarToday color="action" sx={{ mr: 2 }} />
+                      <Box>
+                        <Typography variant="subtitle1">Assessment Date</Typography>
+                        <Typography>{viewAssessment.date}</Typography>
+                      </Box>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Box>
+                        <Typography variant="subtitle1">Sample Size</Typography>
+                        <Typography variant="h6">
+                          {viewAssessment.sampled}/{viewAssessment.sampleSize}
+                        </Typography>
+                      </Box>
+                      <Box>
+                        <Typography variant="subtitle1">Pass Rate</Typography>
+                        <Typography variant="h6" sx={{ 
+                          color: viewAssessment.passRate >= 70 ? 'success.main' : 'error.main',
+                          fontWeight: 'bold'
+                        }}>
+                          {viewAssessment.passRate}%
+                        </Typography>
+                      </Box>
+                      <Box>
+                        <Typography variant="subtitle1">Average Score</Typography>
+                        <Typography variant="h6">
+                          {viewAssessment.details.averageScore}%
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </Grid>
+                </Grid>
+              </Box>
+
+              {/* Tabs for different sections */}
+              <Tabs value={tabValue} onChange={handleTabChange} sx={{ px: 3, pt: 2 }}>
+                <Tab label="Sampled Assessments" />
+                <Tab label="Grading Criteria" />
+                <Tab label="Comments" />
+              </Tabs>
+              <Divider />
+
+              {/* Tab content */}
+              <Box sx={{ p: 3 }}>
+                {tabValue === 0 && (
+                  <TableContainer component={Paper} variant="outlined">
+                    <Table>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Learner</TableCell>
+                          <TableCell align="center">Score</TableCell>
+                          <TableCell align="center">Status</TableCell>
+                          <TableCell align="center">Details</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {viewAssessment.details.sampledAssessments.map((item) => (
+                          <TableRow key={item.id}>
+                            <TableCell>
+                              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                <Avatar src={item.avatar} sx={{ width: 24, height: 24, mr: 2 }} />
+                                {item.learner}
+                              </Box>
+                            </TableCell>
+                            <TableCell align="center">
+                              <Typography fontWeight="bold">{item.score}%</Typography>
+                            </TableCell>
+                            <TableCell align="center">
+                              <PassFailBadge passed={item.passed} />
+                            </TableCell>
+                            <TableCell align="center">
+                              <Button size="small" variant="outlined">
+                                View
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                )}
+
+                {tabValue === 1 && (
+                  <Box>
+                    <Typography variant="subtitle1" gutterBottom>
+                      Grading Breakdown
+                    </Typography>
+                    {viewAssessment.details.gradingCriteria.map((criteria) => (
+                      <Box key={criteria.criterion} sx={{ mb: 3 }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                          <Typography>
+                            {criteria.criterion} ({criteria.weight}%)
+                          </Typography>
+                          <Typography>
+                            Average: {criteria.average}%
+                          </Typography>
+                        </Box>
+                        <LinearProgress
+                          variant="determinate"
+                          value={criteria.average}
+                          sx={{ 
+                            height: 10, 
+                            borderRadius: 5,
+                            backgroundColor: 'grey.200',
+                            '& .MuiLinearProgress-bar': {
+                              backgroundColor: criteria.average >= 70 ? 'success.main' : 
+                                            criteria.average >= 50 ? 'warning.main' : 'error.main'
+                            }
+                          }}
+                        />
+                      </Box>
+                    ))}
+                  </Box>
+                )}
+
+                {tabValue === 2 && (
+                  <List>
+                    {viewAssessment.details.comments.map((comment, index) => (
+                      <React.Fragment key={index}>
+                        <ListItem alignItems="flex-start">
+                          <ListItemAvatar>
+                            <Avatar>{comment.user.charAt(0)}</Avatar>
+                          </ListItemAvatar>
+                          <ListItemText
+                            primary={comment.user}
+                            secondary={
+                              <>
+                                <Typography
+                                  component="span"
+                                  variant="body2"
+                                  color="text.primary"
+                                >
+                                  {comment.date}
+                                </Typography>
+                                {` — ${comment.text}`}
+                              </>
+                            }
+                          />
+                        </ListItem>
+                        {index < viewAssessment.details.comments.length - 1 && <Divider />}
+                      </React.Fragment>
+                    ))}
+                  </List>
+                )}
+              </Box>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button 
+            startIcon={<Download />}
+            variant="outlined"
+            sx={{ mr: 1 }}
+            onClick={handleExportClick}
+          >
+            Export
+          </Button>
+          <Menu
+            anchorEl={exportAnchorEl}
+            open={Boolean(exportAnchorEl)}
+            onClose={handleExportClose}
+          >
+            <MenuItem onClick={() => handleExportDetails('pdf')}>Export as PDF</MenuItem>
+            <MenuItem onClick={() => handleExportDetails('csv')}>Export as CSV</MenuItem>
+          </Menu>
+          <Button 
+            startIcon={<Share />}
+            variant="outlined"
+            sx={{ mr: 1 }}
+            onClick={() => {
+              setSnackbar({ open: true, message: 'Share functionality coming soon', severity: 'info' });
+            }}
+          >
+            Share
+          </Button>
+          <Button 
+            onClick={handleCloseDialog}
+            variant="contained"
+          >
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Analyze Dialog */}
+      <Dialog
+        open={!!analyzeAssessment}
+        onClose={handleCloseDialog}
+        maxWidth="lg"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        <DialogTitle sx={{ bgcolor: 'secondary.main', color: 'white' }}>
+          <Box display="flex" alignItems="center">
+            <IconButton onClick={handleCloseDialog} sx={{ color: 'white', mr: 1 }}>
+              <ArrowBack />
+            </IconButton>
+            Analysis: {analyzeAssessment?.course}
+          </Box>
+        </DialogTitle>
+        <DialogContent dividers sx={{ p: 0 }}>
+          {analyzeAssessment && (
+            <Box id="analysis-content">
+              {/* Summary Cards */}
+              <Box sx={{ p: 3, bgcolor: 'grey.50' }}>
+                <Grid container spacing={3}>
+                  <Grid item xs={12} md={3}>
+                    <Card sx={{ height: '100%' }}>
+                      <CardContent>
+                        <Typography variant="subtitle2" color="text.secondary">
+                          Average Score
+                        </Typography>
+                        <Typography variant="h4" sx={{ color: 'primary.main' }}>
+                          {analyzeAssessment.details.averageScore}%
+                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
+                          {analyzeAssessment.details.averageScore > analyzeAssessment.analysis.comparison.previousAverage ? (
+                            <CheckCircle color="success" sx={{ mr: 0.5 }} />
+                          ) : (
+                            <Error color="error" sx={{ mr: 0.5 }} />
+                          )}
+                          <Typography variant="caption">
+                            {analyzeAssessment.details.averageScore > analyzeAssessment.analysis.comparison.previousAverage ? 
+                              'Up from previous' : 'Down from previous'} ({analyzeAssessment.analysis.comparison.previousAverage}%)
+                          </Typography>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid item xs={12} md={3}>
+                    <Card sx={{ height: '100%' }}>
+                      <CardContent>
+                        <Typography variant="subtitle2" color="text.secondary">
+                          Pass Rate
+                        </Typography>
+                        <Typography variant="h4" sx={{ color: analyzeAssessment.passRate >= 70 ? 'success.main' : 'error.main' }}>
+                          {analyzeAssessment.passRate}%
+                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
+                          <Assessment color="action" sx={{ mr: 0.5 }} />
+                          <Typography variant="caption">
+                            {analyzeAssessment.sampled}/{analyzeAssessment.sampleSize} sampled
+                          </Typography>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid item xs={12} md={3}>
+                    <Card sx={{ height: '100%' }}>
+                      <CardContent>
+                        <Typography variant="subtitle2" color="text.secondary">
+                          Benchmark Comparison
+                        </Typography>
+                        <Typography variant="h4">
+                          {analyzeAssessment.analysis.comparison.benchmark}%
+                        </Typography>
+                        <LinearProgress
+                          variant="determinate"
+                          value={analyzeAssessment.details.averageScore}
+                          sx={{ 
+                            height: 8,
+                            mt: 2,
+                            '& .MuiLinearProgress-bar': {
+                              backgroundColor: analyzeAssessment.details.averageScore >= 
+                                analyzeAssessment.analysis.comparison.benchmark ? 'success.main' : 'error.main'
+                            }
+                          }}
+                        />
+                        <Typography variant="caption" display="block" textAlign="right">
+                          Your average: {analyzeAssessment.details.averageScore}%
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid item xs={12} md={3}>
+                    <Card sx={{ height: '100%' }}>
+                      <CardContent>
+                        <Typography variant="subtitle2" color="text.secondary">
+                          Department Comparison
+                        </Typography>
+                        <Typography variant="h4">
+                          {analyzeAssessment.analysis.comparison.departmentAverage}%
+                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
+                          {analyzeAssessment.details.averageScore > analyzeAssessment.analysis.comparison.departmentAverage ? (
+                            <CheckCircle color="success" sx={{ mr: 0.5 }} />
+                          ) : (
+                            <Error color="error" sx={{ mr: 0.5 }} />
+                          )}
+                          <Typography variant="caption">
+                            {analyzeAssessment.details.averageScore > analyzeAssessment.analysis.comparison.departmentAverage ? 
+                              'Above' : 'Below'} department average
+                          </Typography>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                </Grid>
+              </Box>
+
+              {/* Analysis Tabs */}
+              <Tabs value={tabValue} onChange={handleTabChange} sx={{ px: 3, pt: 2 }}>
+                <Tab label="Score Distribution" icon={<PieChart fontSize="small" />} />
+                <Tab label="Trend Analysis" icon={<Timeline fontSize="small" />} />
+                <Tab label="Recommendations" icon={<CheckCircle fontSize="small" />} />
+              </Tabs>
+              <Divider />
+
+              {/* Tab Content */}
+              <Box sx={{ p: 3 }}>
+                {tabValue === 0 && (
+                  <Box>
+                    <Typography variant="h6" gutterBottom>
+                      Score Distribution
+                    </Typography>
+                    <Grid container spacing={3}>
+                      <Grid item xs={12} md={6}>
+                        <Card variant="outlined">
+                          <CardContent>
+                            <Typography variant="subtitle1" gutterBottom>
+                              Score Ranges
+                            </Typography>
+                            <Box sx={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <Box sx={{ 
+                                width: '100%', 
+                                height: '80%', 
+                                bgcolor: 'grey.100', 
+                                borderRadius: 2,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                              }}>
+                                <Typography color="text.secondary">
+                                  Pie chart showing score distribution
+                                </Typography>
+                              </Box>
+                            </Box>
+                            <TableContainer component={Paper} variant="outlined" sx={{ mt: 2 }}>
+                              <Table size="small">
+                                <TableHead>
+                                  <TableRow>
+                                    <TableCell>Score Range</TableCell>
+                                    <TableCell align="right">Number of Learners</TableCell>
+                                    <TableCell align="right">Percentage</TableCell>
+                                  </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                  {analyzeAssessment.analysis.scoreDistribution.map((item) => (
+                                    <TableRow key={item.range}>
+                                      <TableCell>{item.range}</TableCell>
+                                      <TableCell align="right">{item.count}</TableCell>
+                                      <TableCell align="right">
+                                        {Math.round((item.count / analyzeAssessment.details.totalLearners) * 100)}%
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </TableContainer>
+                          </CardContent>
+                        </Card>
+                      </Grid>
+                      <Grid item xs={12} md={6}>
+                        <Card variant="outlined">
+                          <CardContent>
+                            <Typography variant="subtitle1" gutterBottom>
+                              Weakest Areas
+                            </Typography>
+                            <List>
+                              {analyzeAssessment.details.gradingCriteria
+                                .sort((a, b) => a.average - b.average)
+                                .slice(0, 3)
+                                .map((criteria, index) => (
+                                  <ListItem key={index}>
+                                    <ListItemAvatar>
+                                      <Avatar sx={{ 
+                                        bgcolor: criteria.average >= 70 ? 'success.light' : 
+                                                criteria.average >= 50 ? 'warning.light' : 'error.light',
+                                        color: criteria.average >= 70 ? 'success.dark' : 
+                                              criteria.average >= 50 ? 'warning.dark' : 'error.dark'
+                                      }}>
+                                        {index + 1}
+                                      </Avatar>
+                                    </ListItemAvatar>
+                                    <ListItemText
+                                      primary={criteria.criterion}
+                                      secondary={`Average: ${criteria.average}% (Weight: ${criteria.weight}%)`}
+                                    />
+                                  </ListItem>
+                                ))}
+                            </List>
+                            <Typography variant="body2" sx={{ mt: 2, fontStyle: 'italic' }}>
+                              * Lowest scoring criteria highlighted above
+                            </Typography>
+                          </CardContent>
+                        </Card>
+                      </Grid>
+                    </Grid>
+                  </Box>
+                )}
+
+                {tabValue === 1 && (
+                  <Box>
+                    <Typography variant="h6" gutterBottom>
+                      Trend Analysis
+                    </Typography>
+                    <Card variant="outlined">
+                      <CardContent>
+                        <Box sx={{ height: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Box sx={{ 
+                            width: '100%', 
+                            height: '80%', 
+                            bgcolor: 'grey.100', 
+                            borderRadius: 2,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}>
+                            <Typography color="text.secondary">
+                              Line chart showing performance trends over time
+                            </Typography>
+                          </Box>
+                        </Box>
+                        <Grid container spacing={2} sx={{ mt: 2 }}>
+                          <Grid item xs={12} md={6}>
+                            <Typography variant="subtitle1">Comparison to Previous</Typography>
+                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                              {analyzeAssessment.details.averageScore > analyzeAssessment.analysis.comparison.previousAverage ? (
+                                <CheckCircle color="success" sx={{ mr: 1 }} />
+                              ) : (
+                                <Error color="error" sx={{ mr: 1 }} />
+                              )}
+                              <Typography>
+                                {Math.abs(analyzeAssessment.details.averageScore - analyzeAssessment.analysis.comparison.previousAverage)}%
+                                {analyzeAssessment.details.averageScore > analyzeAssessment.analysis.comparison.previousAverage ? 
+                                  ' improvement' : ' decline'} from previous assessment
+                              </Typography>
+                            </Box>
+                          </Grid>
+                          <Grid item xs={12} md={6}>
+                            <Typography variant="subtitle1">Department Benchmark</Typography>
+                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                              {analyzeAssessment.details.averageScore > analyzeAssessment.analysis.comparison.departmentAverage ? (
+                                <CheckCircle color="success" sx={{ mr: 1 }} />
+                              ) : (
+                                <Error color="error" sx={{ mr: 1 }} />
+                              )}
+                              <Typography>
+                                {Math.abs(analyzeAssessment.details.averageScore - analyzeAssessment.analysis.comparison.departmentAverage)}%
+                                {analyzeAssessment.details.averageScore > analyzeAssessment.analysis.comparison.departmentAverage ? 
+                                  ' above' : ' below'} department average
+                              </Typography>
+                            </Box>
+                          </Grid>
+                        </Grid>
+                      </CardContent>
+                    </Card>
+                  </Box>
+                )}
+
+                {tabValue === 2 && (
+                  <Box>
+                    <Typography variant="h6" gutterBottom>
+                      Recommendations
+                    </Typography>
+                    <Card variant="outlined">
+                      <CardContent>
+                        <List>
+                          {analyzeAssessment.analysis.recommendations.map((rec, index) => (
+                            <ListItem key={index}>
+                              <ListItemAvatar>
+                                <Avatar sx={{ bgcolor: 'primary.main' }}>
+                                  {index + 1}
+                                </Avatar>
+                              </ListItemAvatar>
+                              <ListItemText
+                                primary={rec}
+                                primaryTypographyProps={{ fontWeight: 'medium' }}
+                              />
+                            </ListItem>
+                          ))}
+                        </List>
+                        <Box sx={{ mt: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                          <Typography variant="subtitle1" gutterBottom>
+                            Next Steps
+                          </Typography>
+                          <Typography>
+                            Based on this analysis, we recommend prioritizing the first 2-3 recommendations
+                            and scheduling a follow-up review in 2 weeks to assess progress.
+                          </Typography>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  </Box>
+                )}
+              </Box>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button 
+            startIcon={<Download />}
+            variant="outlined"
+            sx={{ mr: 1 }}
+            onClick={handleExportClick}
+          >
+            Export
+          </Button>
+          <Menu
+            anchorEl={exportAnchorEl}
+            open={Boolean(exportAnchorEl)}
+            onClose={handleExportClose}
+          >
+            <MenuItem onClick={() => handleExportAnalysis('pdf')}>Export as PDF</MenuItem>
+            <MenuItem onClick={() => handleExportAnalysis('csv')}>Export as CSV</MenuItem>
+          </Menu>
+          <Button 
+            onClick={handleCloseDialog}
+            variant="contained"
+            color="secondary"
+          >
+            Close
+          </Button>
+        </DialogActions>
+
+
+        
+      </Dialog>
+
+      {/* Snackbar for export notifications */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+          severity={snackbar.severity}
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+    </Box>
+  );
+}
+
+// === File: EqaSubmissionModal.jsx ===
+
+
+// === File: FeedbackDialog.jsx ===
+import React, { useState } from 'react';
+import {
+  Dialog,  DialogTitle,  DialogContent,  DialogActions,
+  Box,  Typography,  TextField,
+  Button,  Select,  MenuItem,  FormControl,
+  InputLabel,  Grid,  Divider,  Rating,
+  IconButton,  Chip,  Avatar,
+  Paper,  List,  ListItem,
+  ListItemText,  ListItemSecondaryAction,  Snackbar,
+  Alert
+} from '@mui/material';
+import {
+  Close as CloseIcon,
+  AttachFile as AttachFileIcon,
+  Delete as DeleteIcon,
+  Person as PersonIcon,
+  School as CourseIcon,
+  Computer as SystemIcon
+} from '@mui/icons-material';
+
+const FeedbackDialog = ({ open, onClose, trainers, courses }) => {
+  const [feedback, setFeedback] = useState({
+    type: 'trainer',
+    trainerId: trainers[0]?.id || '',
+    courseId: courses[0]?.id || '',
+    rating: 3,
+    comments: '',
+    attachments: []
+  });
+  const [fileInputKey, setFileInputKey] = useState(Date.now());
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: '',
+    severity: 'success'
+  });
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFeedback(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleFileUpload = (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length > 0) {
+      setFeedback(prev => ({
+        ...prev,
+        attachments: [...prev.attachments, ...files.map(file => ({
+          name: file.name,
+          size: file.size,
+          file
+        }))]
+      }));
+      setFileInputKey(Date.now());
+    }
+  };
+
+  const handleRemoveAttachment = (index) => {
+    setFeedback(prev => ({
+      ...prev,
+      attachments: prev.attachments.filter((_, i) => i !== index)
+    }));
+  };
+
+  const handleSubmit = () => {
+    console.log('Feedback submitted:', feedback);
+    
+    setSnackbar({
+      open: true,
+      message: 'Feedback submitted successfully!',
+      severity: 'success'
+    });
+    
+    // Close the dialog after submission
+    setTimeout(() => {
+      onClose();
+      // Reset form
+      setFeedback({
+        type: 'trainer',
+        trainerId: trainers[0]?.id || '',
+        courseId: courses[0]?.id || '',
+        rating: 3,
+        comments: '',
+        attachments: []
+      });
+    }, 1500);
+  };
+
+  const handleCloseSnackbar = () => {
+    setSnackbar(prev => ({ ...prev, open: false }));
+  };
+
+  return (
+    <>
+      <Dialog
+        open={open}
+        onClose={onClose}
+        fullWidth
+        maxWidth="md"
+        scroll="paper"
+      >
+        <DialogTitle>
+          <Box display="flex" justifyContent="space-between" alignItems="center">
+            <Typography variant="h6">Provide Feedback</Typography>
+            <IconButton onClick={onClose}>
+              <CloseIcon />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent dividers>
+          <Grid container spacing={3} sx={{ pt: 2 }}>
+            <Grid item xs={12}>
+              <FormControl fullWidth>
+                <InputLabel>Feedback Type</InputLabel>
+                <Select
+                  name="type"
+                  value={feedback.type}
+                  onChange={handleChange}
+                  label="Feedback Type"
+                >
+                  <MenuItem value="trainer">
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <PersonIcon fontSize="small" /> Trainer Feedback
+                    </Box>
+                  </MenuItem>
+                  <MenuItem value="course">
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <CourseIcon fontSize="small" /> Course Feedback
+                    </Box>
+                  </MenuItem>
+                  <MenuItem value="system">
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <SystemIcon fontSize="small" /> System Feedback
+                    </Box>
+                  </MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+
+            {feedback.type === 'trainer' && (
+              <Grid item xs={12}>
+                <FormControl fullWidth>
+                  <InputLabel>Select Trainer</InputLabel>
+                  <Select
+                    name="trainerId"
+                    value={feedback.trainerId}
+                    onChange={handleChange}
+                    label="Select Trainer"
+                  >
+                    {trainers?.map(trainer => (
+                      <MenuItem key={trainer.id} value={trainer.id}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Avatar sx={{ width: 24, height: 24 }} src={trainer.avatar}>
+                            {trainer.name.charAt(0)}
+                          </Avatar>
+                          {trainer.name}
+                        </Box>
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+            )}
+
+            {feedback.type === 'course' && (
+              <Grid item xs={12}>
+                <FormControl fullWidth>
+                  <InputLabel>Select Course</InputLabel>
+                  <Select
+                    name="courseId"
+                    value={feedback.courseId}
+                    onChange={handleChange}
+                    label="Select Course"
+                  >
+                    {courses?.map(course => (
+                      <MenuItem key={course.id} value={course.id}>
+                        {course.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+            )}
+
+            <Grid item xs={12}>
+              <Typography component="legend">Rating</Typography>
+              <Rating
+                name="rating"
+                value={Number(feedback.rating)}
+                onChange={(event, newValue) => {
+                  setFeedback(prev => ({ ...prev, rating: newValue }));
+                }}
+                precision={0.5}
+                size="large"
+              />
+            </Grid>
+
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                multiline
+                rows={4}
+                name="comments"
+                label="Detailed Feedback"
+                value={feedback.comments}
+                onChange={handleChange}
+                variant="outlined"
+                required
+              />
+            </Grid>
+
+            <Grid item xs={12}>
+              <input
+                key={fileInputKey}
+                type="file"
+                id="file-upload"
+                style={{ display: 'none' }}
+                onChange={handleFileUpload}
+                multiple
+                accept=".pdf,.jpg,.jpeg,.png"
+              />
+              <label htmlFor="file-upload">
+                <Button
+                  variant="outlined"
+                  component="span"
+                  startIcon={<AttachFileIcon />}
+                >
+                  Attach Files
+                </Button>
+              </label>
+              <Typography variant="caption" display="block" sx={{ mt: 1 }}>
+                Maximum file size: 5MB. Supported formats: PDF, JPG, PNG
+              </Typography>
+            </Grid>
+
+            {feedback.attachments.length > 0 && (
+              <Grid item xs={12}>
+                <Paper variant="outlined" sx={{ p: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Attachments ({feedback.attachments.length})
+                  </Typography>
+                  <List dense>
+                    {feedback.attachments.map((file, index) => (
+                      <ListItem key={index}>
+                        <ListItemText
+                          primary={file.name}
+                          secondary={`${(file.size / 1024).toFixed(2)} KB`}
+                        />
+                        <ListItemSecondaryAction>
+                          <IconButton
+                            edge="end"
+                            aria-label="delete"
+                            onClick={() => handleRemoveAttachment(index)}
+                          >
+                            <DeleteIcon />
+                          </IconButton>
+                        </ListItemSecondaryAction>
+                      </ListItem>
+                    ))}
+                  </List>
+                </Paper>
+              </Grid>
+            )}
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button variant="outlined" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button 
+            variant="contained" 
+            onClick={handleSubmit}
+            disabled={!feedback.comments.trim()}
+          >
+            Submit Feedback
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+    </>
+  );
+};
+
+export default FeedbackDialog;
+
+// === File: FeedbackForm.jsx ===
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  Box, Typography, TextField, Button,
+  Select, MenuItem, FormControl, InputLabel, Grid, Card, CardHeader, CardContent, Divider,
+  Rating, IconButton, Chip, Avatar, Paper, List, ListItem, ListItemText,
+  ListItemSecondaryAction, Snackbar, Alert
+} from '@mui/material';
+import {
+  ArrowBack as ArrowBackIcon,
+  AttachFile as AttachFileIcon, Delete as DeleteIcon, Person as PersonIcon, School as CourseIcon,
+  Computer as SystemIcon
+} from '@mui/icons-material';
+
+// Dummy data for trainers and courses
+const DUMMY_TRAINERS = [
+  { id: '1', name: 'John Smith', avatar: '' },
+  { id: '2', name: 'Sarah Johnson', avatar: '' },
+  { id: '3', name: 'Michael Brown', avatar: '' },
+  { id: '4', name: 'Emily Davis', avatar: '' }
+];
+
+const DUMMY_COURSES = [
+  { id: '1', name: 'Advanced React' },
+  { id: '2', name: 'Node.js Fundamentals' },
+  { id: '3', name: 'Database Design' },
+  { id: '4', name: 'UI/UX Principles' }
+];
+
+const FeedbackForm = ({ trainers = DUMMY_TRAINERS, courses = DUMMY_COURSES, onClose }) => {
+    const navigate = useNavigate();
+  const [feedback, setFeedback] = useState({
+    type: 'trainer',
+    trainerId: trainers[0]?.id || '',
+    courseId: courses[0]?.id || '',
+    rating: 3,
+    comments: '',
+    attachments: []
+  });
+  const [fileInputKey, setFileInputKey] = useState(Date.now());
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: '',
+    severity: 'success'
+  });
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFeedback(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleFileUpload = (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length > 0) {
+      setFeedback(prev => ({
+        ...prev,
+        attachments: [...prev.attachments, ...files.map(file => ({
+          name: file.name,
+          size: file.size,
+          file
+        }))]
+      }));
+      setFileInputKey(Date.now());
+    }
+  };
+
+  const handleRemoveAttachment = (index) => {
+    setFeedback(prev => ({
+      ...prev,
+      attachments: prev.attachments.filter((_, i) => i !== index)
+    }));
+  };
+
+  const handleGoBack = () => {
+    // First try using the onClose prop if provided (for modal usage)
+    if (typeof onClose === 'function') {
+      onClose();
+    } 
+    // Otherwise use navigation
+    else {
+      navigate(-1); // Go back to previous page
+    }
+  };
+
+  const handleSubmit = () => {
+    console.log('Feedback submitted:', feedback);
+    
+    setSnackbar({
+      open: true,
+      message: 'Feedback submitted successfully!',
+      severity: 'success'
+    });
+    
+    // Use the same back navigation as handleGoBack
+    setTimeout(() => handleGoBack(), 1500);
+  };
+ 
+
+  const handleCloseSnackbar = () => {
+    setSnackbar(prev => ({ ...prev, open: false }));
+  };
+
+  return (
+    <Box sx={{ p: 3 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+        <IconButton onClick={handleGoBack} sx={{ mr: 2 }}>
+          <ArrowBackIcon />
+        </IconButton>
+        <Typography variant="h4" component="h1">
+          Provide Feedback
+        </Typography>
+      </Box>
+
+      <Card>
+        <CardHeader title="Feedback Details" />
+        <Divider />
+        <CardContent>
+          <Grid container spacing={3}>
+            <Grid item xs={12}>
+              <FormControl fullWidth>
+                <InputLabel>Feedback Type</InputLabel>
+                <Select
+                  name="type"
+                  value={feedback.type}
+                  onChange={handleChange}
+                  label="Feedback Type"
+                >
+                  <MenuItem value="trainer">
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <PersonIcon fontSize="small" /> Trainer Feedback
+                    </Box>
+                  </MenuItem>
+                  <MenuItem value="course">
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <CourseIcon fontSize="small" /> Course Feedback
+                    </Box>
+                  </MenuItem>
+                  <MenuItem value="system">
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <SystemIcon fontSize="small" /> System Feedback
+                    </Box>
+                  </MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+
+            {feedback.type === 'trainer' && (
+              <Grid item xs={12}>
+                <FormControl fullWidth>
+                  <InputLabel>Select Trainer</InputLabel>
+                  <Select
+                    name="trainerId"
+                    value={feedback.trainerId}
+                    onChange={handleChange}
+                    label="Select Trainer"
+                  >
+                    {trainers?.map(trainer => (
+                      <MenuItem key={trainer.id} value={trainer.id}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Avatar sx={{ width: 24, height: 24 }} src={trainer.avatar}>
+                            {trainer.name.charAt(0)}
+                          </Avatar>
+                          {trainer.name}
+                        </Box>
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+            )}
+
+            {feedback.type === 'course' && (
+              <Grid item xs={12}>
+                <FormControl fullWidth>
+                  <InputLabel>Select Course</InputLabel>
+                  <Select
+                    name="courseId"
+                    value={feedback.courseId}
+                    onChange={handleChange}
+                    label="Select Course"
+                  >
+                    {courses?.map(course => (
+                      <MenuItem key={course.id} value={course.id}>
+                        {course.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+            )}
+
+            <Grid item xs={12}>
+              <Typography component="legend">Rating</Typography>
+              <Rating
+                name="rating"
+                value={Number(feedback.rating)}
+                onChange={(event, newValue) => {
+                  setFeedback(prev => ({ ...prev, rating: newValue }));
+                }}
+                precision={0.5}
+                size="large"
+              />
+            </Grid>
+
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                multiline
+                rows={4}
+                name="comments"
+                label="Detailed Feedback"
+                value={feedback.comments}
+                onChange={handleChange}
+                variant="outlined"
+                required
+              />
+            </Grid>
+
+            <Grid item xs={12}>
+              <input
+                key={fileInputKey}
+                type="file"
+                id="file-upload"
+                style={{ display: 'none' }}
+                onChange={handleFileUpload}
+                multiple
+                accept=".pdf,.jpg,.jpeg,.png"
+              />
+              <label htmlFor="file-upload">
+                <Button
+                  variant="outlined"
+                  component="span"
+                  startIcon={<AttachFileIcon />}
+                >
+                  Attach Files
+                </Button>
+              </label>
+              <Typography variant="caption" display="block" sx={{ mt: 1 }}>
+                Maximum file size: 5MB. Supported formats: PDF, JPG, PNG
+              </Typography>
+            </Grid>
+
+            {feedback.attachments.length > 0 && (
+              <Grid item xs={12}>
+                <Paper variant="outlined" sx={{ p: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Attachments ({feedback.attachments.length})
+                  </Typography>
+                  <List dense>
+                    {feedback.attachments.map((file, index) => (
+                      <ListItem key={index}>
+                        <ListItemText
+                          primary={file.name}
+                          secondary={`${(file.size / 1024).toFixed(2)} KB`}
+                        />
+                        <ListItemSecondaryAction>
+                          <IconButton
+                            edge="end"
+                            aria-label="delete"
+                            onClick={() => handleRemoveAttachment(index)}
+                          >
+                            <DeleteIcon />
+                          </IconButton>
+                        </ListItemSecondaryAction>
+                      </ListItem>
+                    ))}
+                  </List>
+                </Paper>
+              </Grid>
+            )}
+          </Grid>
+        </CardContent>
+        <Divider />
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', p: 2 }}>
+          <Button variant="outlined" sx={{ mr: 2 }} onClick={handleGoBack}>
+            Cancel
+          </Button>
+          <Button 
+            variant="contained" 
+            onClick={handleSubmit}
+            disabled={!feedback.comments.trim()}
+          >
+            Submit Feedback
+          </Button>
+        </Box>
+      </Card>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+    </Box>
+  );
+};
+
+export default FeedbackForm;
+
+// === File: FeedbackManagement.jsx ===
+import React, { useState, useEffect } from 'react';
+import {
+  Box,  Typography,  Table,  TableBody,  TableCell,  TableContainer,  TableHead,
+  TableRow,  Paper,  Snackbar,  Alert,
+  TextField,  Button,  Select,  MenuItem,  FormControl,  InputLabel,  Chip,
+  Avatar,  IconButton,  Tooltip,  useTheme,  Divider,  Pagination,  Grid,
+  Dialog,  DialogTitle,  DialogContent,  DialogActions,  FormGroup,  FormControlLabel,  Checkbox,
+} from '@mui/material';
+import {
+  Search as SearchIcon,  FilterList as FilterIcon,
+  Check as CheckIcon,  Close as CloseIcon,
+  Edit as EditIcon,  Delete as DeleteIcon,  Refresh as RefreshIcon,
+  Assignment as AssignmentIcon,  Person as PersonIcon,  Download as DownloadIcon,
+  Feedback as FeedbackIcon,  ArrowBack as ArrowBackIcon
+} from '@mui/icons-material';
+import FeedbackForm from './FeedbackForm';
+
+const FeedbackManagement = () => {
+  const theme = useTheme();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [page, setPage] = useState(1);
+  const [feedbackData, setFeedbackData] = useState([]);
+  const [filterDialogOpen, setFilterDialogOpen] = useState(false);
+  const [selectedTypes, setSelectedTypes] = useState([]);
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [snackbarSeverity, setSnackbarSeverity] = useState('success');
+  const [showFeedbackForm, setShowFeedbackForm] = useState(false);
+  const rowsPerPage = 5;
+
+  // Sample data for trainers and courses
+  const trainers = [
+    { id: '1', name: 'John Smith', avatar: '' },
+    { id: '2', name: 'Sarah Johnson', avatar: '' },
+    { id: '3', name: 'Michael Brown', avatar: '' },
+    { id: '4', name: 'Emily Davis', avatar: '' },
+    { id: '5', name: 'Robert Wilson', avatar: '' },
+    { id: '6', name: 'Lisa Thompson', avatar: '' }
+  ];
+
+  const courses = [
+    { id: '1', name: 'Advanced React' },
+    { id: '2', name: 'Node.js Fundamentals' },
+    { id: '3', name: 'Database Design' },
+    { id: '4', name: 'UI/UX Principles' },
+    { id: '5', name: 'JavaScript Advanced' },
+    { id: '6', name: 'Python Basics' }
+  ];
+
+  // Feedback types for advanced filtering
+  const feedbackTypes = ['Assessment', 'Observation', 'Learner Feedback', 'Trainer Self-Review'];
+
+  // Initialize with sample data
+  useEffect(() => {
+    refreshData();
+  }, []);
+
+  const refreshData = () => {
+    // Simulate API call
+    setSnackbarMessage('Data refreshed successfully');
+    setSnackbarSeverity('success');
+    setSnackbarOpen(true);
+    
+    // Sample data
+    const sampleData = [
+      {
+        id: 1,
+        trainer: 'John Smith',
+        course: 'Advanced React',
+        date: '2023-05-15',
+        type: 'Assessment',
+        status: 'Pending',
+        comments: 'Assessment criteria needs clarification',
+        iqaAction: 'Review required'
+      },
+      {
+        id: 2,
+        trainer: 'Sarah Johnson',
+        course: 'Node.js Fundamentals',
+        date: '2023-05-10',
+        type: 'Observation',
+        status: 'Resolved',
+        comments: 'Excellent session delivery observed',
+        iqaAction: 'No action needed'
+      },
+      {
+        id: 3,
+        trainer: 'Michael Brown',
+        course: 'Database Design',
+        date: '2023-05-08',
+        type: 'Learner Feedback',
+        status: 'In Progress',
+        comments: 'Learners requested more practical examples',
+        iqaAction: 'Content update scheduled'
+      },
+      {
+        id: 4,
+        trainer: 'Emily Davis',
+        course: 'UI/UX Principles',
+        date: '2023-05-05',
+        type: 'Assessment',
+        status: 'Pending',
+        comments: 'Inconsistent grading across assessments',
+        iqaAction: 'Standardization needed'
+      },
+      {
+        id: 5,
+        trainer: 'Robert Wilson',
+        course: 'JavaScript Advanced',
+        date: '2023-05-01',
+        type: 'Observation',
+        status: 'Resolved',
+        comments: 'Technical issues during demo',
+        iqaAction: 'Tech check completed'
+      },
+      {
+        id: 6,
+        trainer: 'Lisa Thompson',
+        course: 'Python Basics',
+        date: '2023-04-28',
+        type: 'Learner Feedback',
+        status: 'In Progress',
+        comments: 'Pace too fast for beginners',
+        iqaAction: 'Pacing adjustment in progress'
+      }
+    ];
+    
+    setFeedbackData(sampleData);
+  };
+
+  const handleFeedbackSubmit = (newFeedback) => {
+    // Format the new feedback
+    const newFeedbackWithId = {
+      ...newFeedback,
+      id: Math.max(...feedbackData.map(f => f.id)) + 1,
+      trainer: trainers.find(t => t.id === newFeedback.trainerId)?.name || 'N/A',
+      course: courses.find(c => c.id === newFeedback.courseId)?.name || 'N/A',
+      type: newFeedback.type.charAt(0).toUpperCase() + newFeedback.type.slice(1) + ' Feedback',
+      status: 'Pending',
+      iqaAction: 'Review required',
+      date: new Date().toISOString().split('T')[0]
+    };
+
+    setFeedbackData(prev => [newFeedbackWithId, ...prev]);
+    setShowFeedbackForm(false);
+    setSnackbarMessage('Feedback submitted successfully!');
+    setSnackbarSeverity('success');
+    setSnackbarOpen(true);
+  };
+
+  const generateReport = () => {
+    setSnackbarMessage('Feedback report generated successfully');
+    setSnackbarSeverity('success');
+    setSnackbarOpen(true);
+    
+    // Create a CSV file
+    const headers = ['Trainer', 'Course', 'Date', 'Type', 'Status', 'Comments', 'IQA Action'];
+    const csvContent = [
+      headers.join(','),
+      ...filteredData.map(item => [
+        `"${item.trainer}"`,
+        `"${item.course}"`,
+        `"${item.date}"`,
+        `"${item.type}"`,
+        `"${item.status}"`,
+        `"${item.comments}"`,
+        `"${item.iqaAction}"`
+      ].join(','))
+    ].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `feedback-report-${new Date().toISOString().slice(0,10)}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleStatusChange = (id, newStatus) => {
+    setFeedbackData(prevData =>
+      prevData.map(item =>
+        item.id === id ? { ...item, status: newStatus } : item
+      )
+    );
+    setSnackbarMessage(`Feedback status updated to ${newStatus}`);
+    setSnackbarSeverity('success');
+    setSnackbarOpen(true);
+  };
+
+  const handleDelete = (id) => {
+    setFeedbackData(prevData => prevData.filter(item => item.id !== id));
+    setSnackbarMessage('Feedback deleted successfully');
+    setSnackbarSeverity('success');
+    setSnackbarOpen(true);
+  };
+
+  const handleTypeFilterChange = (type) => {
+    setSelectedTypes(prev =>
+      prev.includes(type)
+        ? prev.filter(t => t !== type)
+        : [...prev, type]
+    );
+  };
+
+  const applyAdvancedFilters = () => {
+    setFilterDialogOpen(false);
+    setPage(1);
+  };
+
+  const resetFilters = () => {
+    setSelectedTypes([]);
+    setStatusFilter('all');
+    setSearchTerm('');
+  };
+
+  const filteredData = feedbackData.filter(item => {
+    const matchesSearch = 
+      item.trainer.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.course.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.comments.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = 
+      statusFilter === 'all' || item.status.toLowerCase() === statusFilter.toLowerCase();
+    
+    const matchesTypes = 
+      selectedTypes.length === 0 || selectedTypes.includes(item.type);
+    
+    return matchesSearch && matchesStatus && matchesTypes;
+  });
+
+  const handlePageChange = (event, newPage) => {
+    setPage(newPage);
+  };
+
+  const paginatedData = filteredData.slice(
+    (page - 1) * rowsPerPage,
+    page * rowsPerPage
+  );
+
+  const getStatusColor = (status) => {
+    switch (status.toLowerCase()) {
+      case 'pending':
+        return 'warning';
+      case 'in progress':
+        return 'info';
+      case 'resolved':
+        return 'success';
+      default:
+        return 'default';
+    }
+  };
+
+  if (showFeedbackForm) {
+    return (
+      <FeedbackForm 
+        trainers={trainers}
+        courses={courses}
+        onSubmit={handleFeedbackSubmit}
+        onCancel={() => setShowFeedbackForm(false)}
+      />
+    );
+  }
+
+  return (
+    <Box sx={{ p: 3 }}>
+      <Typography variant="h5" gutterBottom sx={{ fontWeight: 600, mb: 3 }}>
+        Feedback Management
+      </Typography>
+      
+      {/* Filters and Search */}
+      <Grid container spacing={2} sx={{ mb: 3 }}>
+        <Grid item xs={12} md={6}>
+          <TextField
+            fullWidth
+            variant="outlined"
+            placeholder="Search feedback..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            InputProps={{
+              startAdornment: <SearchIcon sx={{ color: theme.palette.text.secondary, mr: 1 }} />
+            }}
+          />
+        </Grid>
+        <Grid item xs={12} md={3}>
+          <FormControl fullWidth>
+            <InputLabel>Status</InputLabel>
+            <Select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              label="Status"
+            >
+              <MenuItem value="all">All Statuses</MenuItem>
+              <MenuItem value="pending">Pending</MenuItem>
+              <MenuItem value="in progress">In Progress</MenuItem>
+              <MenuItem value="resolved">Resolved</MenuItem>
+            </Select>
+          </FormControl>
+        </Grid>
+        <Grid item xs={12} md={3}>
+          <Button
+            fullWidth
+            variant="outlined"
+            startIcon={<FilterIcon />}
+            sx={{ height: '56px' }}
+            onClick={() => setFilterDialogOpen(true)}
+          >
+            Advanced Filters
+          </Button>
+        </Grid>
+      </Grid>
+
+      {/* Feedback Table */}
+      <TableContainer component={Paper} sx={{ mb: 3 }}>
+        <Table>
+          <TableHead sx={{ backgroundColor: theme.palette.grey[100] }}>
+            <TableRow>
+              <TableCell sx={{ fontWeight: 600 }}>Trainer</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>Course</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>Date</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>Type</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>Comments</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>IQA Action</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>Actions</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {paginatedData.map((row) => (
+              <TableRow key={row.id}>
+                <TableCell>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <Avatar sx={{ width: 32, height: 32, mr: 1, bgcolor: theme.palette.primary.main }}>
+                      <PersonIcon fontSize="small" />
+                    </Avatar>
+                    {row.trainer}
+                  </Box>
+                </TableCell>
+                <TableCell>{row.course}</TableCell>
+                <TableCell>{row.date}</TableCell>
+                <TableCell>{row.type}</TableCell>
+                <TableCell>
+                  <Chip
+                    label={row.status}
+                    color={getStatusColor(row.status)}
+                    size="small"
+                  />
+                </TableCell>
+                <TableCell sx={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {row.comments}
+                </TableCell>
+                <TableCell>{row.iqaAction}</TableCell>
+                <TableCell>
+                  <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Tooltip title="Mark as Resolved">
+                      <IconButton size="small" onClick={() => handleStatusChange(row.id, 'Resolved')}>
+                        <CheckIcon color="success" fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Edit">
+                      <IconButton size="small">
+                        <EditIcon color="info" fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Delete">
+                      <IconButton size="small" onClick={() => handleDelete(row.id)}>
+                        <DeleteIcon color="error" fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+
+      {/* Pagination */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Typography variant="body2" color="text.secondary">
+          Showing {paginatedData.length} of {filteredData.length} feedback items
+        </Typography>
+        <Pagination
+          count={Math.ceil(filteredData.length / rowsPerPage)}
+          page={page}
+          onChange={handlePageChange}
+          color="primary"
+        />
+      </Box>
+
+      {/* Quick Actions */}
+      <Divider sx={{ my: 3 }} />
+      <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
+        Quick Actions
+      </Typography>
+      <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
+        <Button 
+          variant="contained" 
+          startIcon={<DownloadIcon />}
+          onClick={generateReport}
+        >
+          Generate Feedback Report
+        </Button>
+        <Button 
+          variant="outlined" 
+          startIcon={<RefreshIcon />}
+          onClick={refreshData}
+        >
+          Refresh Data
+        </Button>
+        <Button 
+          variant="contained" 
+          startIcon={<FeedbackIcon />}
+          onClick={() => setShowFeedbackForm(true)}
+          sx={{ ml: 'auto' }}
+        >
+          Give New Feedback
+        </Button>
+      </Box>
+
+      {/* Advanced Filters Dialog */}
+      <Dialog open={filterDialogOpen} onClose={() => setFilterDialogOpen(false)}>
+        <DialogTitle>Advanced Filters</DialogTitle>
+        <DialogContent>
+          <Typography variant="subtitle1" gutterBottom sx={{ mt: 2 }}>
+            Feedback Types
+          </Typography>
+          <FormGroup>
+            {feedbackTypes.map(type => (
+              <FormControlLabel
+                key={type}
+                control={
+                  <Checkbox
+                    checked={selectedTypes.includes(type)}
+                    onChange={() => handleTypeFilterChange(type)}
+                  />
+                }
+                label={type}
+              />
+            ))}
+          </FormGroup>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={resetFilters}>Reset All</Button>
+          <Button onClick={() => setFilterDialogOpen(false)}>Cancel</Button>
+          <Button variant="contained" onClick={applyAdvancedFilters}>
+            Apply Filters
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Snackbar for notifications */}
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={3000}
+        onClose={() => setSnackbarOpen(false)}
+        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        <Alert onClose={() => setSnackbarOpen(false)} severity={snackbarSeverity}>
+          {snackbarMessage}
+        </Alert>
+      </Snackbar>
+    </Box>
+  );
+};
+
+export default FeedbackManagement;
+
+// === File: IqaDashboard.jsx ===
+// src/components/QaulityAssuranceDashboard/IqaDashboard.jsx
+import React, { useState } from 'react';
+import { 
+  Box, 
+  Grid, 
+  Typography, 
+  Paper, 
+  Button, 
+  Divider, 
+  Chip,
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableContainer, 
+  TableHead, 
+  TableRow,
+  TextField,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  IconButton,
+  Tooltip,
+  useTheme
+} from '@mui/material';
+import { 
+  FilterList as FilterIcon,
+  Search as SearchIcon,
+  Refresh as RefreshIcon,
+  FileDownload as ExportIcon,
+  Add as AddIcon,
+  Visibility as ViewIcon,
+  Edit as EditIcon,
+  CheckCircle as ApprovedIcon,
+  Warning as IssuesIcon,
+  Assignment as ReportIcon
+} from '@mui/icons-material';
+import IqaSamplingModal from '../IqaSamplingModal';
+import IqaFeedbackModal from '../IqaFeedbackModal';
+
+const sampleIqaChecks = [
+  {
+    id: 'IQA-2023-001',
+    course: 'Advanced React Development',
+    trainer: 'Dr. Sarah Johnson',
+    date: '2023-05-15',
+    type: 'Online Session',
+    status: 'Completed',
+    result: 'Approved',
+    issues: 0,
+    reviewer: 'Michael Brown'
+  },
+  {
+    id: 'IQA-2023-002',
+    course: 'Cybersecurity Fundamentals',
+    trainer: 'Prof. James Wilson',
+    date: '2023-05-18',
+    type: 'Offline Assessment',
+    status: 'Completed',
+    result: 'Minor Issues',
+    issues: 2,
+    reviewer: 'Emily Davis'
+  },
+  {
+    id: 'IQA-2023-003',
+    course: 'Data Science Bootcamp',
+    trainer: 'Dr. Lisa Chen',
+    date: '2023-05-20',
+    type: 'Course Materials',
+    status: 'In Progress',
+    result: 'Pending',
+    issues: null,
+    reviewer: 'Michael Brown'
+  },
+  {
+    id: 'IQA-2023-004',
+    course: 'Cloud Architecture',
+    trainer: 'Prof. Robert Taylor',
+    date: '2023-05-22',
+    type: 'Learner Assessments',
+    status: 'Scheduled',
+    result: 'Pending',
+    issues: null,
+    reviewer: null
+  },
+];
+
+const IqaDashboard = () => {
+  const theme = useTheme();
+  const [openSamplingModal, setOpenSamplingModal] = useState(false);
+  const [openFeedbackModal, setOpenFeedbackModal] = useState(false);
+  const [selectedCheck, setSelectedCheck] = useState(null);
+  const [filter, setFilter] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const handleViewDetails = (check) => {
+    setSelectedCheck(check);
+    setOpenFeedbackModal(true);
+  };
+
+  const handleNewSampling = () => {
+    setOpenSamplingModal(true);
+  };
+
+  const filteredChecks = sampleIqaChecks.filter(check => {
+    const matchesFilter = filter === 'all' || 
+                         (filter === 'completed' && check.status === 'Completed') ||
+                         (filter === 'in-progress' && check.status === 'In Progress') ||
+                         (filter === 'scheduled' && check.status === 'Scheduled');
+    
+    const matchesSearch = searchTerm === '' || 
+                         check.course.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         check.trainer.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         check.id.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    return matchesFilter && matchesSearch;
+  });
+
+  const stats = {
+    total: sampleIqaChecks.length,
+    completed: sampleIqaChecks.filter(c => c.status === 'Completed').length,
+    approved: sampleIqaChecks.filter(c => c.result === 'Approved').length,
+    withIssues: sampleIqaChecks.filter(c => c.result === 'Minor Issues' || c.result === 'Major Issues').length,
+  };
+
+  return (
+    <Box sx={{ width: '100%' }}>
+      <Typography variant="h5" component="h2" gutterBottom sx={{ fontWeight: 600 }}>
+        Internal Quality Assurance (IQA)
+      </Typography>
+      
+      <Paper elevation={0} sx={{ mb: 3, p: 2, backgroundColor: theme.palette.background.paper }}>
+        <Typography variant="body1" paragraph>
+          Monitor and manage internal quality assurance checks across all training activities. 
+          Schedule new quality checks, review completed assessments, and provide feedback to trainers.
+        </Typography>
+        
+        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 2 }}>
+          <Button 
+            variant="contained" 
+            startIcon={<AddIcon />}
+            onClick={handleNewSampling}
+          >
+            New Quality Check
+          </Button>
+          <Button 
+            variant="outlined" 
+            startIcon={<ExportIcon />}
+          >
+            Export Reports
+          </Button>
+          <Button 
+            variant="outlined" 
+            startIcon={<RefreshIcon />}
+          >
+            Refresh Data
+          </Button>
+        </Box>
+      </Paper>
+      
+      <Grid container spacing={3} sx={{ mb: 3 }}>
+        <Grid item xs={12} sm={6} md={3}>
+          <Paper sx={{ p: 2, textAlign: 'center' }}>
+            <Typography variant="subtitle2" color="text.secondary">Total Checks</Typography>
+            <Typography variant="h4">{stats.total}</Typography>
+          </Paper>
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <Paper sx={{ p: 2, textAlign: 'center' }}>
+            <Typography variant="subtitle2" color="text.secondary">Completed</Typography>
+            <Typography variant="h4">{stats.completed}</Typography>
+          </Paper>
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <Paper sx={{ p: 2, textAlign: 'center' }}>
+            <Typography variant="subtitle2" color="text.secondary">Approved</Typography>
+            <Typography variant="h4" sx={{ color: theme.palette.success.main }}>
+              {stats.approved}
+            </Typography>
+          </Paper>
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <Paper sx={{ p: 2, textAlign: 'center' }}>
+            <Typography variant="subtitle2" color="text.secondary">With Issues</Typography>
+            <Typography variant="h4" sx={{ color: theme.palette.warning.main }}>
+              {stats.withIssues}
+            </Typography>
+          </Paper>
+        </Grid>
+      </Grid>
+      
+      <Paper sx={{ p: 2, mb: 3 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="h6">Recent Quality Checks</Typography>
+          
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <TextField
+              size="small"
+              placeholder="Search..."
+              InputProps={{
+                startAdornment: <SearchIcon fontSize="small" sx={{ mr: 1, color: 'action.active' }} />,
+              }}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            
+            <FormControl size="small" sx={{ minWidth: 120 }}>
+              <InputLabel>Filter</InputLabel>
+              <Select
+                value={filter}
+                label="Filter"
+                onChange={(e) => setFilter(e.target.value)}
+              >
+                <MenuItem value="all">All</MenuItem>
+                <MenuItem value="completed">Completed</MenuItem>
+                <MenuItem value="in-progress">In Progress</MenuItem>
+                <MenuItem value="scheduled">Scheduled</MenuItem>
+              </Select>
+            </FormControl>
+            
+            <Tooltip title="More filters">
+              <IconButton>
+                <FilterIcon />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        </Box>
+        
+        <Divider sx={{ mb: 2 }} />
+        
+        <TableContainer>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Check ID</TableCell>
+                <TableCell>Course</TableCell>
+                <TableCell>Trainer</TableCell>
+                <TableCell>Date</TableCell>
+                <TableCell>Type</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell>Result</TableCell>
+                <TableCell align="right">Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {filteredChecks.map((check) => (
+                <TableRow key={check.id}>
+                  <TableCell>{check.id}</TableCell>
+                  <TableCell>{check.course}</TableCell>
+                  <TableCell>{check.trainer}</TableCell>
+                  <TableCell>{check.date}</TableCell>
+                  <TableCell>{check.type}</TableCell>
+                  <TableCell>
+                    <Chip 
+                      label={check.status} 
+                      size="small" 
+                      color={
+                        check.status === 'Completed' ? 'success' : 
+                        check.status === 'In Progress' ? 'warning' : 'default'
+                      }
+                    />
+                  </TableCell>
+                  <TableCell>
+                    {check.result === 'Approved' ? (
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <ApprovedIcon fontSize="small" color="success" />
+                        <span>Approved</span>
+                      </Box>
+                    ) : check.result === 'Minor Issues' ? (
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <IssuesIcon fontSize="small" color="warning" />
+                        <span>Minor Issues ({check.issues})</span>
+                      </Box>
+                    ) : (
+                      <span>{check.result}</span>
+                    )}
+                  </TableCell>
+                  <TableCell align="right">
+                    <Tooltip title="View details">
+                      <IconButton size="small" onClick={() => handleViewDetails(check)}>
+                        <ViewIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    {check.status === 'Completed' && (
+                      <Tooltip title="Generate report">
+                        <IconButton size="small">
+                          <ReportIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Paper>
+      
+      <IqaSamplingModal 
+        open={openSamplingModal} 
+        onClose={() => setOpenSamplingModal(false)} 
+      />
+      
+      <IqaFeedbackModal 
+        open={openFeedbackModal} 
+        onClose={() => setOpenFeedbackModal(false)} 
+        check={selectedCheck}
+      />
+    </Box>
+  );
+};
+
+export default IqaDashboard;
+
+// === File: IqaFeedbackModal.jsx ===
+
+
+// === File: IQAManagement.jsx ===
+import React, { useState } from 'react';
+import {
+  Box, Typography, Tabs, Tab, Card, CardContent, CardHeader, Divider,
+  Grid, Button, Paper, Table, TableBody, TableCell, TableContainer, TableHead,
+  TableRow, Avatar, Chip, TextField, InputAdornment,
+  Dialog, DialogTitle, DialogContent, DialogActions, Snackbar, Alert,
+  MenuItem, FormControl, InputLabel, Select, IconButton
+} from '@mui/material';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import {
+  Search as SearchIcon, FilterList as FilterIcon, Add as AddIcon,
+  Assignment as ReportsIcon, Person as TrainerIcon,
+  Assessment as AssessmentIcon, Feedback as FeedbackIcon,
+  Timeline as TimelineIcon, Assignment as AssignmentIcon, Close as CloseIcon
+} from '@mui/icons-material';
+import { LocalizationProvider } from '@mui/x-date-pickers';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import TrainerMonitoring from './TrainerMonitoring';
+import AssessmentSampling from './AssessmentSampling';
+import LMSDataAnalysis from './LMSDataAnalysis';
+import FeedbackManagement from './FeedbackManagement';
+import FeedbackDialog from './FeedbackDialog';
+// TabPanel component (unchanged)
+function TabPanel(props) {
+  const { children, value, index, ...other } = props;
+
+  return (
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`iqa-tabpanel-${index}`}
+      aria-labelledby={`iqa-tab-${index}`}
+      {...other}
+    >
+      {value === index && (
+        <Box sx={{ p: 2 }}>
+          {children}
+        </Box>
+      )}
+    </div>
+  );
+}
+
+function IQAManagement() {
+  // State for tabs and search
+  const [tabValue, setTabValue] = useState(0);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // State for dialogs
+  const [openDialog, setOpenDialog] = useState(null);
+  const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
+
+  // State for notifications
+  const [snackbar, setSnackbar] = useState({ 
+    open: false, 
+    message: '', 
+    severity: 'success' 
+  });
+
+  // State for form data
+  const [sampleData, setSampleData] = useState({
+    course: '',
+    trainer: '',
+    date: null
+  });
+
+  const [observationData, setObservationData] = useState({
+    trainer: '',
+    date: null,
+    type: 'Virtual'
+  });
+
+  const [newCheckData, setNewCheckData] = useState({
+    checkType: '',
+    trainer: '',
+    course: '',
+    date: null,
+    priority: 'Medium'
+  });
+
+  // Dummy data
+  const trainers = [
+    { id: '1', name: 'John Smith' },
+    { id: '2', name: 'Sarah Johnson' },
+    { id: '3', name: 'Michael Brown' },
+    { id: '4', name: 'Emily Davis' }
+  ];
+
+  const courses = [
+    { id: '1', name: 'Advanced React' },
+    { id: '2', name: 'Node.js Fundamentals' },
+    { id: '3', name: 'Database Design' },
+    { id: '4', name: 'UI/UX Principles' }
+  ];
+
+  const recentActivities = [
+    { id: 1, trainer: 'John Smith', action: 'Session Observed', date: '2023-06-15', status: 'Completed' },
+    { id: 2, trainer: 'Sarah Johnson', action: 'Assessment Sampled', date: '2023-06-14', status: 'Pending Review' },
+    { id: 3, trainer: 'Michael Brown', action: 'Feedback Provided', date: '2023-06-12', status: 'Completed' },
+    { id: 4, trainer: 'Emily Davis', action: 'Session Scheduled', date: '2023-06-10', status: 'Upcoming' },
+  ];
+
+  // Handler functions
+  const handleTabChange = (event, newValue) => {
+    setTabValue(newValue);
+  };
+
+  const handleOpenDialog = (action) => {
+    setOpenDialog(action);
+  };
+
+  const handleCloseDialog = () => {
+    setOpenDialog(null);
+  };
+
+  const handleSampleSubmit = () => {
+    setSnackbar({
+      open: true,
+      message: `Assessment sampling scheduled for ${sampleData.course} with ${sampleData.trainer}`,
+      severity: 'success'
+    });
+    setSampleData({ course: '', trainer: '', date: null });
+    handleCloseDialog();
+  };
+
+  const handleObservationSubmit = () => {
+    setSnackbar({
+      open: true,
+      message: `Observation scheduled for ${observationData.trainer} (${observationData.type})`,
+      severity: 'success'
+    });
+    setObservationData({ trainer: '', date: null, type: 'Virtual' });
+    handleCloseDialog();
+  };
+
+  const handleNewCheckSubmit = () => {
+    setSnackbar({
+      open: true,
+      message: `New ${newCheckData.checkType} check scheduled for ${newCheckData.course}`,
+      severity: 'success'
+    });
+    setNewCheckData({
+      checkType: '',
+      trainer: '',
+      course: '',
+      date: null,
+      priority: 'Medium'
+    });
+    handleCloseDialog();
+  };
+
+  const generateReport = () => {
+    setSnackbar({
+      open: true,
+      message: 'IQA Report generated and downloaded',
+      severity: 'success'
+    });
+    
+    // Simulate report download
+    const blob = new Blob(["Sample IQA Report Content"], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'IQA-Report.txt';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const giveFeedback = () => {
+    setFeedbackDialogOpen(true);
+  };
+
+  return (
+    <LocalizationProvider dateAdapter={AdapterDateFns}>
+      <Box>
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={8}>
+            <Card>
+              <CardHeader 
+                title="Internal Quality Assurance"
+                subheader="Monitor and improve training quality"
+                action={
+                  <Button 
+                    variant="contained" 
+                    startIcon={<AddIcon />}
+                    size="small"
+                    onClick={() => handleOpenDialog('newCheck')}
+                  >
+                    New IQA Check
+                  </Button>
+                }
+              />
+              <Divider />
+              <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between' }}>
+                <TextField
+                  size="small"
+                  placeholder="Search IQA records..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon />
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+                <Button startIcon={<FilterIcon />}>Filters</Button>
+              </Box>
+              <Tabs
+                value={tabValue}
+                onChange={handleTabChange}
+                variant="scrollable"
+                scrollButtons="auto"
+              >
+                <Tab label="Trainer Monitoring" icon={<TrainerIcon fontSize="small" />} />
+                <Tab label="Assessment Sampling" icon={<AssessmentIcon fontSize="small" />} />
+                <Tab label="LMS Data" icon={<TimelineIcon fontSize="small" />} />
+                <Tab label="Feedback" icon={<FeedbackIcon fontSize="small" />} />
+                <Tab label="Reports" icon={<ReportsIcon fontSize="small" />} />
+              </Tabs>
+              <Divider />
+              <TabPanel value={tabValue} index={0}>
+                <TrainerMonitoring />
+                </TabPanel>
+                <TabPanel value={tabValue} index={1}>
+                <AssessmentSampling />
+                </TabPanel>
+                <TabPanel value={tabValue} index={2}>
+                <LMSDataAnalysis />
+                </TabPanel>
+                <TabPanel value={tabValue} index={3}>
+                <FeedbackManagement />
+                </TabPanel>
+                <TabPanel value={tabValue} index={4}>
+                <Typography>IQA Reports will be displayed here</Typography>
+                </TabPanel>
+            </Card>
+          </Grid>
+          
+          <Grid item xs={12} md={4}>
+            <Card>
+              <CardHeader title="Recent IQA Activities" />
+              <Divider />
+              <TableContainer component={Paper} sx={{ maxHeight: 440 }}>
+                <Table size="small" stickyHeader>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Trainer</TableCell>
+                      <TableCell>Action</TableCell>
+                      <TableCell>Date</TableCell>
+                      <TableCell>Status</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {recentActivities.map((activity) => (
+                      <TableRow key={activity.id}>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            <Avatar sx={{ width: 24, height: 24, mr: 1 }}>
+                              {activity.trainer.charAt(0)}
+                            </Avatar>
+                            {activity.trainer}
+                          </Box>
+                        </TableCell>
+                        <TableCell>{activity.action}</TableCell>
+                        <TableCell>{activity.date}</TableCell>
+                        <TableCell>
+                          <Chip 
+                            label={activity.status}
+                            size="small"
+                            color={
+                              activity.status === 'Completed' ? 'success' :
+                              activity.status === 'Pending Review' ? 'warning' : 'info'
+                            }
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Card>
+            
+            <Card sx={{ mt: 3 }}>
+              <CardHeader title="Quick Actions" />
+              <Divider />
+              <CardContent>
+                <Grid container spacing={2}>
+                  <Grid item xs={6}>
+                    <Button 
+                      variant="outlined" 
+                      fullWidth
+                      startIcon={<AssignmentIcon />}
+                      onClick={() => handleOpenDialog('sample')}
+                    >
+                      Sample Assessments
+                    </Button>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Button 
+                      variant="outlined" 
+                      fullWidth
+                      startIcon={<FeedbackIcon />}
+                      onClick={giveFeedback}
+                    >
+                      Give Feedback
+                    </Button>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Button 
+                      variant="outlined" 
+                      fullWidth
+                      startIcon={<TimelineIcon />}
+                      onClick={generateReport}
+                    >
+                      Generate Report
+                    </Button>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Button 
+                      variant="outlined" 
+                      fullWidth
+                      startIcon={<TrainerIcon />}
+                      onClick={() => handleOpenDialog('observation')}
+                    >
+                      Schedule Observation
+                    </Button>
+                  </Grid>
+                </Grid>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+
+        {/* Sample Assessments Dialog */}
+        <Dialog open={openDialog === 'sample'} onClose={handleCloseDialog}>
+          <DialogTitle>
+            Schedule Assessment Sampling
+            <IconButton
+              aria-label="close"
+              onClick={handleCloseDialog}
+              sx={{
+                position: 'absolute',
+                right: 8,
+                top: 8,
+                color: (theme) => theme.palette.grey[500],
+              }}
+            >
+              <CloseIcon />
+            </IconButton>
+          </DialogTitle>
+          <DialogContent>
+            <FormControl fullWidth sx={{ mt: 2, mb: 2 }}>
+              <InputLabel>Select Course</InputLabel>
+              <Select
+                value={sampleData.course}
+                onChange={(e) => setSampleData({...sampleData, course: e.target.value})}
+                label="Select Course"
+              >
+                {courses.map((course) => (
+                  <MenuItem key={course.id} value={course.name}>{course.name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl fullWidth sx={{ mb: 2 }}>
+              <InputLabel>Select Trainer</InputLabel>
+              <Select
+                value={sampleData.trainer}
+                onChange={(e) => setSampleData({...sampleData, trainer: e.target.value})}
+                label="Select Trainer"
+              >
+                {trainers.map((trainer) => (
+                  <MenuItem key={trainer.id} value={trainer.name}>{trainer.name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <DatePicker
+              label="Sampling Date"
+              value={sampleData.date}
+              onChange={(newValue) => setSampleData({...sampleData, date: newValue})}
+              renderInput={(params) => <TextField {...params} fullWidth sx={{ mb: 2 }} />}
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseDialog}>Cancel</Button>
+            <Button 
+              variant="contained" 
+              onClick={handleSampleSubmit}
+              disabled={!sampleData.course || !sampleData.trainer || !sampleData.date}
+            >
+              Schedule
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Schedule Observation Dialog */}
+        <Dialog open={openDialog === 'observation'} onClose={handleCloseDialog}>
+          <DialogTitle>
+            Schedule Trainer Observation
+            <IconButton
+              aria-label="close"
+              onClick={handleCloseDialog}
+              sx={{
+                position: 'absolute',
+                right: 8,
+                top: 8,
+                color: (theme) => theme.palette.grey[500],
+              }}
+            >
+              <CloseIcon />
+            </IconButton>
+          </DialogTitle>
+          <DialogContent>
+            <FormControl fullWidth sx={{ mt: 2, mb: 2 }}>
+              <InputLabel>Select Trainer</InputLabel>
+              <Select
+                value={observationData.trainer}
+                onChange={(e) => setObservationData({...observationData, trainer: e.target.value})}
+                label="Select Trainer"
+              >
+                {trainers.map((trainer) => (
+                  <MenuItem key={trainer.id} value={trainer.name}>{trainer.name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl fullWidth sx={{ mb: 2 }}>
+              <InputLabel>Observation Type</InputLabel>
+              <Select
+                value={observationData.type}
+                onChange={(e) => setObservationData({...observationData, type: e.target.value})}
+                label="Observation Type"
+              >
+                <MenuItem value="Virtual">Virtual</MenuItem>
+                <MenuItem value="In-Person">In-Person</MenuItem>
+              </Select>
+            </FormControl>
+            <DatePicker
+              label="Observation Date"
+              value={observationData.date}
+              onChange={(newValue) => setObservationData({...observationData, date: newValue})}
+              renderInput={(params) => <TextField {...params} fullWidth sx={{ mb: 2 }} />}
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseDialog}>Cancel</Button>
+            <Button 
+              variant="contained" 
+              onClick={handleObservationSubmit}
+              disabled={!observationData.trainer || !observationData.date}
+            >
+              Schedule
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* New IQA Check Dialog */}
+        <Dialog open={openDialog === 'newCheck'} onClose={handleCloseDialog}>
+          <DialogTitle>
+            Schedule New IQA Check
+            <IconButton
+              aria-label="close"
+              onClick={handleCloseDialog}
+              sx={{
+                position: 'absolute',
+                right: 8,
+                top: 8,
+                color: (theme) => theme.palette.grey[500],
+              }}
+            >
+              <CloseIcon />
+            </IconButton>
+          </DialogTitle>
+          <DialogContent>
+            <FormControl fullWidth sx={{ mt: 2, mb: 2 }}>
+              <InputLabel>Check Type</InputLabel>
+              <Select
+                value={newCheckData.checkType}
+                onChange={(e) => setNewCheckData({...newCheckData, checkType: e.target.value})}
+                label="Check Type"
+              >
+                <MenuItem value="Assessment">Assessment Review</MenuItem>
+                <MenuItem value="Observation">Training Observation</MenuItem>
+                <MenuItem value="Documentation">Documentation Check</MenuItem>
+                <MenuItem value="Compliance">Compliance Audit</MenuItem>
+              </Select>
+            </FormControl>
+
+            <FormControl fullWidth sx={{ mb: 2 }}>
+              <InputLabel>Select Course</InputLabel>
+              <Select
+                value={newCheckData.course}
+                onChange={(e) => setNewCheckData({...newCheckData, course: e.target.value})}
+                label="Select Course"
+              >
+                {courses.map((course) => (
+                  <MenuItem key={course.id} value={course.name}>{course.name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <FormControl fullWidth sx={{ mb: 2 }}>
+              <InputLabel>Select Trainer</InputLabel>
+              <Select
+                value={newCheckData.trainer}
+                onChange={(e) => setNewCheckData({...newCheckData, trainer: e.target.value})}
+                label="Select Trainer"
+              >
+                {trainers.map((trainer) => (
+                  <MenuItem key={trainer.id} value={trainer.name}>{trainer.name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <DatePicker
+              label="Check Date"
+              value={newCheckData.date}
+              onChange={(newValue) => setNewCheckData({...newCheckData, date: newValue})}
+              renderInput={(params) => <TextField {...params} fullWidth sx={{ mb: 2 }} />}
+            />
+
+            <FormControl fullWidth sx={{ mb: 2 }}>
+              <InputLabel>Priority</InputLabel>
+              <Select
+                value={newCheckData.priority}
+                onChange={(e) => setNewCheckData({...newCheckData, priority: e.target.value})}
+                label="Priority"
+              >
+                <MenuItem value="Low">Low</MenuItem>
+                <MenuItem value="Medium">Medium</MenuItem>
+                <MenuItem value="High">High</MenuItem>
+              </Select>
+            </FormControl>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseDialog}>Cancel</Button>
+            <Button 
+              variant="contained" 
+              onClick={handleNewCheckSubmit}
+              disabled={!newCheckData.checkType || !newCheckData.course || !newCheckData.date}
+            >
+              Schedule Check
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Snackbar for notifications */}
+        <Snackbar
+          open={snackbar.open}
+          autoHideDuration={6000}
+          onClose={() => setSnackbar({...snackbar, open: false})}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        >
+          <Alert 
+            onClose={() => setSnackbar({...snackbar, open: false})} 
+            severity={snackbar.severity}
+            sx={{ width: '100%' }}
+          >
+            {snackbar.message}
+          </Alert>
+        </Snackbar>
+
+        <FeedbackDialog 
+        open={feedbackDialogOpen}
+        onClose={() => setFeedbackDialogOpen(false)}
+        trainers={trainers}
+        courses={courses}
+        />
+      </Box>
+
+    </LocalizationProvider>
+  );
+}
+
+
+export default IQAManagement;
+
+// === File: IQAReports.jsx ===
+import React, { useState } from 'react';
+import {
+  Box,
+  Typography,
+  Tabs,
+  Tab,
+  Card,
+  CardContent,
+  CardHeader,
+  Avatar,
+  List,
+  ListItem,
+  ListItemAvatar,
+  ListItemText,
+  Divider,
+  Button,
+  IconButton,
+  useTheme,
+  Grid,
+  Paper,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel
+} from '@mui/material';
+import {
+  Assessment as ReportIcon,
+  BarChart as ChartIcon,
+  Download as DownloadIcon,
+  FilterAlt as FilterIcon,
+  DateRange as DateIcon,
+  Person as PersonIcon,
+  CheckCircle as CompleteIcon,
+  Warning as WarningIcon,
+  Error as ErrorIcon
+} from '@mui/icons-material';
+
+const IQAReports = () => {
+  const theme = useTheme();
+  const [tabValue, setTabValue] = useState(0);
+  const [reportType, setReportType] = useState('monthly');
+  const [timePeriod, setTimePeriod] = useState('last-30');
+
+  const handleTabChange = (event, newValue) => {
+    setTabValue(newValue);
+  };
+
+  // Sample report data
+  const summaryData = {
+    totalAssessments: 124,
+    completedAssessments: 98,
+    pendingAssessments: 26,
+    complianceRate: 89,
+    averageScore: 82,
+    observationsCompleted: 45,
+    feedbackItems: 32
+  };
+
+  const recentActivities = [
+    {
+      id: 1,
+      type: 'Assessment',
+      course: 'React Advanced',
+      trainer: 'John Smith',
+      date: '2023-05-15',
+      status: 'Completed',
+      icon: <CompleteIcon color="success" />
+    },
+    {
+      id: 2,
+      type: 'Observation',
+      course: 'Node.js Fundamentals',
+      trainer: 'Sarah Johnson',
+      date: '2023-05-14',
+      status: 'Pending Review',
+      icon: <WarningIcon color="warning" />
+    },
+    {
+      id: 3,
+      type: 'Feedback',
+      course: 'Database Design',
+      trainer: 'Michael Brown',
+      date: '2023-05-12',
+      status: 'Action Required',
+      icon: <ErrorIcon color="error" />
+    },
+    {
+      id: 4,
+      type: 'Assessment',
+      course: 'UI/UX Principles',
+      trainer: 'Emily Davis',
+      date: '2023-05-10',
+      status: 'Completed',
+      icon: <CompleteIcon color="success" />
+    }
+  ];
+
+  const complianceData = [
+    { standard: 'Assessment Quality', compliance: 92, target: 90 },
+    { standard: 'Trainer Competency', compliance: 88, target: 85 },
+    { standard: 'Content Accuracy', compliance: 95, target: 90 },
+    { standard: 'Learner Feedback', compliance: 82, target: 80 },
+    { standard: 'Documentation', compliance: 90, target: 85 }
+  ];
+
+  return (
+    <Box sx={{ p: 3 }}>
+      <Typography variant="h5" gutterBottom sx={{ fontWeight: 600, mb: 3 }}>
+        IQA Reports & Analytics
+      </Typography>
+
+      {/* Report Controls */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
+        <Tabs 
+          value={tabValue} 
+          onChange={handleTabChange}
+          sx={{
+            '& .MuiTabs-indicator': {
+              backgroundColor: theme.palette.primary.main,
+              height: 3
+            }
+          }}
+        >
+          <Tab label="Summary" />
+          <Tab label="Compliance" />
+          <Tab label="Detailed Reports" />
+          <Tab label="Trend Analysis" />
+        </Tabs>
+        
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <FormControl size="small" sx={{ minWidth: 120 }}>
+            <InputLabel>Report Type</InputLabel>
+            <Select
+              value={reportType}
+              onChange={(e) => setReportType(e.target.value)}
+              label="Report Type"
+            >
+              <MenuItem value="monthly">Monthly</MenuItem>
+              <MenuItem value="quarterly">Quarterly</MenuItem>
+              <MenuItem value="custom">Custom</MenuItem>
+            </Select>
+          </FormControl>
+          
+          <FormControl size="small" sx={{ minWidth: 120 }}>
+            <InputLabel>Time Period</InputLabel>
+            <Select
+              value={timePeriod}
+              onChange={(e) => setTimePeriod(e.target.value)}
+              label="Time Period"
+            >
+              <MenuItem value="last-30">Last 30 Days</MenuItem>
+              <MenuItem value="last-90">Last 90 Days</MenuItem>
+              <MenuItem value="ytd">Year to Date</MenuItem>
+            </Select>
+          </FormControl>
+          
+          <Button variant="contained" startIcon={<DownloadIcon />}>
+            Export
+          </Button>
+        </Box>
+      </Box>
+
+      {/* Tab Content */}
+      {tabValue === 0 && (
+        <Grid container spacing={3}>
+          {/* Summary Cards */}
+          <Grid item xs={12} md={3}>
+            <Card>
+              <CardContent>
+                <Typography color="text.secondary" gutterBottom>
+                  Total Assessments
+                </Typography>
+                <Typography variant="h4" component="div">
+                  {summaryData.totalAssessments}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} md={3}>
+            <Card>
+              <CardContent>
+                <Typography color="text.secondary" gutterBottom>
+                  Completed
+                </Typography>
+                <Typography variant="h4" component="div" color="success.main">
+                  {summaryData.completedAssessments}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} md={3}>
+            <Card>
+              <CardContent>
+                <Typography color="text.secondary" gutterBottom>
+                  Pending
+                </Typography>
+                <Typography variant="h4" component="div" color="warning.main">
+                  {summaryData.pendingAssessments}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} md={3}>
+            <Card>
+              <CardContent>
+                <Typography color="text.secondary" gutterBottom>
+                  Compliance Rate
+                </Typography>
+                <Typography variant="h4" component="div">
+                  {summaryData.complianceRate}%
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* Recent Activities */}
+          <Grid item xs={12} md={8}>
+            <Card>
+              <CardHeader
+                title="Recent IQA Activities"
+                action={
+                  <IconButton>
+                    <FilterIcon />
+                  </IconButton>
+                }
+              />
+              <CardContent>
+                <List>
+                  {recentActivities.map((activity) => (
+                    <React.Fragment key={activity.id}>
+                      <ListItem
+                        secondaryAction={
+                          <Typography variant="body2" color="text.secondary">
+                            {activity.date}
+                          </Typography>
+                        }
+                      >
+                        <ListItemAvatar>
+                          <Avatar sx={{ bgcolor: 'transparent' }}>
+                            {activity.icon}
+                          </Avatar>
+                        </ListItemAvatar>
+                        <ListItemText
+                          primary={`${activity.type} - ${activity.course}`}
+                          secondary={`By ${activity.trainer}`}
+                        />
+                      </ListItem>
+                      <Divider variant="inset" component="li" />
+                    </React.Fragment>
+                  ))}
+                </List>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* Quick Stats */}
+          <Grid item xs={12} md={4}>
+            <Card>
+              <CardHeader title="Quick Stats" />
+              <CardContent>
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    Average Assessment Score
+                  </Typography>
+                  <Typography variant="h4">
+                    {summaryData.averageScore}/100
+                  </Typography>
+                </Box>
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    Observations Completed
+                  </Typography>
+                  <Typography variant="h4">
+                    {summaryData.observationsCompleted}
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography variant="body2" color="text.secondary">
+                    Feedback Items
+                  </Typography>
+                  <Typography variant="h4">
+                    {summaryData.feedbackItems}
+                  </Typography>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+      )}
+
+      {tabValue === 1 && (
+        <Card>
+          <CardHeader
+            title="Compliance Report"
+            subheader="Against Quality Standards"
+            action={
+              <Button variant="outlined" startIcon={<DownloadIcon />}>
+                Export Compliance Report
+              </Button>
+            }
+          />
+          <CardContent>
+            <TableContainer component={Paper}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 600 }}>Quality Standard</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }} align="right">Compliance (%)</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }} align="right">Target (%)</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }} align="right">Variance</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {complianceData.map((row) => (
+                    <TableRow key={row.standard}>
+                      <TableCell>{row.standard}</TableCell>
+                      <TableCell align="right">{row.compliance}</TableCell>
+                      <TableCell align="right">{row.target}</TableCell>
+                      <TableCell align="right">
+                        {row.compliance - row.target > 0 ? '+' : ''}
+                        {row.compliance - row.target}
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={row.compliance >= row.target ? 'Met' : 'Below Target'}
+                          color={row.compliance >= row.target ? 'success' : 'error'}
+                          size="small"
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </CardContent>
+        </Card>
+      )}
+
+      {tabValue === 2 && (
+        <Card>
+          <CardHeader
+            title="Detailed IQA Reports"
+            action={
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <Button variant="outlined" startIcon={<DateIcon />}>
+                  Select Date Range
+                </Button>
+                <Button variant="contained" startIcon={<DownloadIcon />}>
+                  Generate Report
+                </Button>
+              </Box>
+            }
+          />
+          <CardContent>
+            <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+              Select parameters to generate detailed IQA reports. Reports can be filtered by trainer, 
+              course, assessment type, and date range.
+            </Typography>
+            
+            <Grid container spacing={3} sx={{ mb: 3 }}>
+              <Grid item xs={12} md={6}>
+                <FormControl fullWidth>
+                  <InputLabel>Select Trainer</InputLabel>
+                  <Select label="Select Trainer">
+                    <MenuItem value="all">All Trainers</MenuItem>
+                    <MenuItem value="john-smith">John Smith</MenuItem>
+                    <MenuItem value="sarah-johnson">Sarah Johnson</MenuItem>
+                    <MenuItem value="michael-brown">Michael Brown</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <FormControl fullWidth>
+                  <InputLabel>Select Course</InputLabel>
+                  <Select label="Select Course">
+                    <MenuItem value="all">All Courses</MenuItem>
+                    <MenuItem value="react-advanced">React Advanced</MenuItem>
+                    <MenuItem value="node-fundamentals">Node.js Fundamentals</MenuItem>
+                    <MenuItem value="database-design">Database Design</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+            </Grid>
+            
+            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+              <Button 
+                variant="contained" 
+                size="large" 
+                startIcon={<AssessmentIcon />}
+                sx={{ px: 4 }}
+              >
+                Generate Custom Report
+              </Button>
+            </Box>
+          </CardContent>
+        </Card>
+      )}
+
+      {tabValue === 3 && (
+        <Card>
+          <CardHeader
+            title="Trend Analysis"
+            subheader="Performance Over Time"
+          />
+          <CardContent>
+            <Box sx={{ 
+              height: '400px', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              backgroundColor: theme.palette.grey[100],
+              borderRadius: 1
+            }}>
+              <Typography color="text.secondary">
+                [Trend charts and graphs would be displayed here]
+              </Typography>
+            </Box>
+            
+            <Grid container spacing={3} sx={{ mt: 2 }}>
+              <Grid item xs={12} md={6}>
+                <Typography variant="h6" gutterBottom>
+                  Key Observations
+                </Typography>
+                <Typography>
+                  • Assessment quality has improved by 8% over the last quarter
+                </Typography>
+                <Typography>
+                  • Trainer observations show consistent delivery standards
+                </Typography>
+                <Typography>
+                  • Learner feedback scores have stabilized at 82% satisfaction
+                </Typography>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Typography variant="h6" gutterBottom>
+                  Recommendations
+                </Typography>
+                <Typography>
+                  • Continue monthly sampling of assessments
+                </Typography>
+                <Typography>
+                  • Provide additional training on documentation standards
+                </Typography>
+                <Typography>
+                  • Review feedback from learners requesting more practical examples
+                </Typography>
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
+      )}
+    </Box>
+  );
+};
+
+export default IQAReports;
+
+// === File: IqaSamplingModal.jsx ===
+// src/components/QaulityAssuranceDashboard/IqaSamplingModal.jsx
+import React, { useState } from 'react';
+import {
+  Box,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  FormControl,
+  Grid,
+  InputLabel,
+  MenuItem,
+  Select,
+  TextField,
+  Typography,
+  useTheme
+} from '@mui/material';
+import {
+  CalendarToday as CalendarIcon,
+  Person as TrainerIcon,
+  School as CourseIcon,
+  Checklist as ChecklistIcon,
+  Close as CloseIcon
+} from '@mui/icons-material';
+
+const IqaSamplingModal = ({ open, onClose }) => {
+  const theme = useTheme();
+  const [formData, setFormData] = useState({
+    sampleType: 'random',
+    course: '',
+    trainer: '',
+    date: '',
+    focusArea: '',
+    notes: ''
+  });
+
+  const courses = [
+    'Advanced React Development',
+    'Cybersecurity Fundamentals',
+    'Data Science Bootcamp',
+    'Cloud Architecture'
+  ];
+
+  const trainers = [
+    'Dr. Sarah Johnson',
+    'Prof. James Wilson',
+    'Dr. Lisa Chen',
+    'Prof. Robert Taylor'
+  ];
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleSubmit = () => {
+    console.log('Submitting IQA sampling:', formData);
+    onClose();
+  };
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>
+        <Box display="flex" alignItems="center">
+          <ChecklistIcon sx={{ mr: 1 }} />
+          <Typography variant="h6">Schedule New Quality Check</Typography>
+          <IconButton
+            aria-label="close"
+            onClick={onClose}
+            sx={{
+              position: 'absolute',
+              right: 8,
+              top: 8,
+              color: (theme) => theme.palette.grey[500],
+            }}
+          >
+            <CloseIcon />
+          </IconButton>
+        </Box>
+      </DialogTitle>
+      
+      <DialogContent dividers>
+        <Grid container spacing={2}>
+          <Grid item xs={12} sm={6}>
+            <FormControl fullWidth margin="normal">
+              <InputLabel>Sampling Type</InputLabel>
+              <Select
+                name="sampleType"
+                value={formData.sampleType}
+                onChange={handleChange}
+                label="Sampling Type"
+              >
+                <MenuItem value="random">Random Sampling</MenuItem>
+                <MenuItem value="targeted">Targeted Sampling</MenuItem>
+                <MenuItem value="full">Full Cohort</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+          
+          <Grid item xs={12} sm={6}>
+            <FormControl fullWidth margin="normal">
+              <InputLabel>Course</InputLabel>
+              <Select
+                name="course"
+                value={formData.course}
+                onChange={handleChange}
+                label="Course"
+                startAdornment={<CourseIcon />}
+              >
+                {courses.map(course => (
+                  <MenuItem key={course} value={course}>{course}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+          
+          <Grid item xs={12} sm={6}>
+            <FormControl fullWidth margin="normal">
+              <InputLabel>Trainer</InputLabel>
+              <Select
+                name="trainer"
+                value={formData.trainer}
+                onChange={handleChange}
+                label="Trainer"
+              >
+                {trainers.map(trainer => (
+                  <MenuItem key={trainer} value={trainer}>{trainer}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+          
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth
+              margin="normal"
+              label="Scheduled Date"
+              type="date"
+              name="date"
+              value={formData.date}
+              onChange={handleChange}
+              InputLabelProps={{ shrink: true }}
+              InputProps={{
+                startAdornment: <CalendarIcon sx={{ mr: 1, color: 'action.active' }} />,
+              }}
+            />
+          </Grid>
+          
+          <Grid item xs={12}>
+            <FormControl fullWidth margin="normal">
+              <InputLabel>Focus Area</InputLabel>
+              <Select
+                name="focusArea"
+                value={formData.focusArea}
+                onChange={handleChange}
+                label="Focus Area"
+              >
+                <MenuItem value="assessment">Assessment Quality</MenuItem>
+                <MenuItem value="delivery">Delivery Methods</MenuItem>
+                <MenuItem value="materials">Learning Materials</MenuItem>
+                <MenuItem value="feedback">Learner Feedback</MenuItem>
+                <MenuItem value="compliance">Compliance</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+          
+          <Grid item xs={12}>
+            <TextField
+              fullWidth
+              margin="normal"
+              label="Notes"
+              name="notes"
+              value={formData.notes}
+              onChange={handleChange}
+              multiline
+              rows={3}
+              placeholder="Any specific instructions or focus points for this quality check..."
+            />
+          </Grid>
+        </Grid>
+      </DialogContent>
+      
+      <DialogActions sx={{ p: 2 }}>
+        <Button onClick={onClose} variant="outlined" sx={{ mr: 1 }}>
+          Cancel
+        </Button>
+        <Button onClick={handleSubmit} variant="contained" color="primary">
+          Schedule Quality Check
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
+export default IqaSamplingModal;
+
+// === File: LMSDataAnalysis.jsx ===
+import React, { useState, useRef } from 'react';
+import {
+  Box,
+  Typography,
+  Grid,
+  Card,
+  CardContent,
+  CardHeader,
+  Divider,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Button,
+  IconButton,
+  Tooltip,
+  Paper,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  LinearProgress,
+  Menu,
+  Snackbar,
+  Alert
+} from '@mui/material';
+import {
+  BarChart as BarChartIcon,
+  PieChart as PieChartIcon,
+  Timeline as TimelineIcon,
+  Warning as WarningIcon,
+  CheckCircle as CheckCircleIcon,
+  Refresh as RefreshIcon,
+  FileDownload as FileDownloadIcon,
+  FilterList as FilterListIcon
+} from '@mui/icons-material';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip as ChartTooltip,
+  Legend,
+  ArcElement
+} from 'chart.js';
+import { Bar, Pie, getElementAtEvent } from 'react-chartjs-2';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
+import autoTable from 'jspdf-autotable';
+
+// Register ChartJS components
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  ChartTooltip,
+  Legend,
+  ArcElement
+);
+
+const courses = [
+  'Health and Safety Level 2',
+  'First Aid at Work',
+  'Manual Handling',
+  'Fire Safety Awareness',
+  'Food Hygiene'
+];
+
+const completionData = {
+  labels: courses,
+  datasets: [
+    {
+      label: 'Completion Rate (%)',
+      data: [92, 85, 78, 88, 95],
+      backgroundColor: 'rgba(54, 162, 235, 0.5)',
+      borderColor: 'rgba(54, 162, 235, 1)',
+      borderWidth: 1,
+    },
+  ],
+};
+
+const passRateData = {
+  labels: ['Pass', 'Fail', 'Incomplete'],
+  datasets: [
+    {
+      data: [75, 15, 10],
+      backgroundColor: [
+        'rgba(75, 192, 192, 0.5)',
+        'rgba(255, 99, 132, 0.5)',
+        'rgba(255, 206, 86, 0.5)'
+      ],
+      borderColor: [
+        'rgba(75, 192, 192, 1)',
+        'rgba(255, 99, 132, 1)',
+        'rgba(255, 206, 86, 1)'
+      ],
+      borderWidth: 1,
+    },
+  ],
+};
+
+const activityData = [
+  {
+    course: 'Health and Safety Level 2',
+    learners: 124,
+    completionRate: 92,
+    avgScore: 85,
+    lastUpdated: '2023-06-18'
+  },
+  {
+    course: 'First Aid at Work',
+    learners: 98,
+    completionRate: 85,
+    avgScore: 78,
+    lastUpdated: '2023-06-17'
+  },
+  {
+    course: 'Manual Handling',
+    learners: 156,
+    completionRate: 78,
+    avgScore: 82,
+    lastUpdated: '2023-06-16'
+  },
+  {
+    course: 'Fire Safety Awareness',
+    learners: 112,
+    completionRate: 88,
+    avgScore: 91,
+    lastUpdated: '2023-06-15'
+  },
+  {
+    course: 'Food Hygiene',
+    learners: 87,
+    completionRate: 95,
+    avgScore: 89,
+    lastUpdated: '2023-06-14'
+  },
+];
+
+export default function LMSDataAnalysis() {
+  const [timeRange, setTimeRange] = useState('30days');
+  const [selectedCourse, setSelectedCourse] = useState('all');
+  const [isLoading, setIsLoading] = useState(false);
+  const [exportAnchorEl, setExportAnchorEl] = useState(null);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const barChartRef = useRef();
+  const pieChartRef = useRef();
+  const tableRef = useRef();
+
+  const handleRefresh = () => {
+    setIsLoading(true);
+    // Simulate data refresh
+    setTimeout(() => {
+      setIsLoading(false);
+      setSnackbar({ open: true, message: 'Data refreshed successfully', severity: 'success' });
+    }, 1500);
+  };
+
+  const handleExportClick = (event) => {
+    setExportAnchorEl(event.currentTarget);
+  };
+
+  const handleExportClose = () => {
+    setExportAnchorEl(null);
+  };
+
+  const exportAsPDF = async () => {
+    try {
+      const pdf = new jsPDF('landscape');
+      
+      // Add title
+      pdf.setFontSize(20);
+      pdf.text('LMS Data Analysis Report', 15, 20);
+      pdf.setFontSize(12);
+      pdf.text(`Generated on: ${new Date().toLocaleDateString()}`, 15, 30);
+      
+      // Add bar chart
+      const barChartCanvas = await html2canvas(barChartRef.current.canvas);
+      pdf.addImage(barChartCanvas.toDataURL('image/png'), 'PNG', 15, 40, 120, 80);
+      
+      // Add pie chart
+      const pieChartCanvas = await html2canvas(pieChartRef.current.canvas);
+      pdf.addImage(pieChartCanvas.toDataURL('image/png'), 'PNG', 150, 40, 120, 80);
+      
+      // Add table data
+      pdf.text('Course Activity Summary', 15, 140);
+      autoTable(pdf, {
+        startY: 145,
+        head: [['Course', 'Learners', 'Completion Rate', 'Average Score', 'Last Updated']],
+        body: activityData.map(row => [
+          row.course,
+          row.learners,
+          `${row.completionRate}%`,
+          `${row.avgScore}%`,
+          row.lastUpdated
+        ]),
+        theme: 'grid',
+        headStyles: { fillColor: [25, 118, 210] }
+      });
+      
+      pdf.save('LMS_Data_Analysis_Report.pdf');
+      setSnackbar({ open: true, message: 'PDF exported successfully', severity: 'success' });
+    } catch (error) {
+      console.error('PDF export error:', error);
+      setSnackbar({ open: true, message: 'Failed to export PDF', severity: 'error' });
+    }
+    handleExportClose();
+  };
+
+  const exportAsCSV = () => {
+    try {
+      // Prepare CSV content
+      let csvContent = "data:text/csv;charset=utf-8,";
+      
+      // Add charts summary
+      csvContent += "Chart Data Summary\r\n";
+      csvContent += "Chart,Category,Value\r\n";
+      
+      // Bar chart data
+      completionData.labels.forEach((label, index) => {
+        csvContent += `Completion Rate,${label},${completionData.datasets[0].data[index]}%\r\n`;
+      });
+      
+      // Pie chart data
+      passRateData.labels.forEach((label, index) => {
+        csvContent += `Pass Rate,${label},${passRateData.datasets[0].data[index]}%\r\n`;
+      });
+      
+      // Add table data
+      csvContent += "\r\nCourse Activity Data\r\n";
+      csvContent += "Course,Learners,Completion Rate,Average Score,Last Updated\r\n";
+      activityData.forEach(row => {
+        csvContent += `${row.course},${row.learners},${row.completionRate}%,${row.avgScore}%,${row.lastUpdated}\r\n`;
+      });
+      
+      // Download CSV
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", "LMS_Data_Analysis.csv");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      setSnackbar({ open: true, message: 'CSV exported successfully', severity: 'success' });
+    } catch (error) {
+      console.error('CSV export error:', error);
+      setSnackbar({ open: true, message: 'Failed to export CSV', severity: 'error' });
+    }
+    handleExportClose();
+  };
+
+  const options = {
+    responsive: true,
+    plugins: {
+      legend: {
+        position: 'top',
+      },
+      title: {
+        display: true,
+        text: 'Course Completion Rates',
+      },
+    },
+    onClick: (event) => {
+      const element = getElementAtEvent(barChartRef.current, event);
+      if (element.length > 0) {
+        const index = element[0].index;
+        setSelectedCourse(completionData.labels[index]);
+      }
+    }
+  };
+
+  return (
+    <Box sx={{ p: 3 }}>
+      <Typography variant="h5" gutterBottom sx={{ mb: 3 }}>
+        LMS Data Analysis
+      </Typography>
+      
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <FormControl size="small" sx={{ width: 150 }}>
+            <InputLabel>Time Range</InputLabel>
+            <Select
+              value={timeRange}
+              onChange={(e) => setTimeRange(e.target.value)}
+              label="Time Range"
+            >
+              <MenuItem value="7days">Last 7 Days</MenuItem>
+              <MenuItem value="30days">Last 30 Days</MenuItem>
+              <MenuItem value="90days">Last 90 Days</MenuItem>
+              <MenuItem value="year">This Year</MenuItem>
+            </Select>
+          </FormControl>
+          
+          <FormControl size="small" sx={{ width: 200 }}>
+            <InputLabel>Course Filter</InputLabel>
+            <Select
+              value={selectedCourse}
+              onChange={(e) => setSelectedCourse(e.target.value)}
+              label="Course Filter"
+            >
+              <MenuItem value="all">All Courses</MenuItem>
+              {courses.map((course) => (
+                <MenuItem key={course} value={course}>{course}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          
+          <Button
+            variant="outlined"
+            startIcon={<FilterListIcon />}
+            onClick={() => alert('Advanced filters coming soon')}
+          >
+            Filters
+          </Button>
+        </Box>
+        
+        <Box>
+          <Tooltip title="Refresh Data">
+            <IconButton onClick={handleRefresh} sx={{ mr: 1 }}>
+              <RefreshIcon />
+            </IconButton>
+          </Tooltip>
+          <Button
+            variant="contained"
+            startIcon={<FileDownloadIcon />}
+            onClick={handleExportClick}
+          >
+            Export
+          </Button>
+          <Menu
+            anchorEl={exportAnchorEl}
+            open={Boolean(exportAnchorEl)}
+            onClose={handleExportClose}
+          >
+            <MenuItem onClick={exportAsPDF}>Export as PDF</MenuItem>
+            <MenuItem onClick={exportAsCSV}>Export as CSV</MenuItem>
+          </Menu>
+        </Box>
+      </Box>
+      
+      {isLoading && <LinearProgress sx={{ mb: 2 }} />}
+      
+      <Grid container spacing={3} sx={{ mb: 3 }}>
+        <Grid item xs={12} md={8}>
+          <Card elevation={3}>
+            <CardHeader
+              title="Course Completion Rates"
+              action={
+                <IconButton>
+                  <BarChartIcon />
+                </IconButton>
+              }
+            />
+            <Divider />
+            <CardContent sx={{ height: 400 }}>
+              <Bar 
+                ref={barChartRef}
+                data={completionData} 
+                options={options} 
+                redraw={isLoading}
+              />
+            </CardContent>
+          </Card>
+        </Grid>
+        
+        <Grid item xs={12} md={4}>
+          <Card elevation={3}>
+            <CardHeader
+              title="Overall Pass Rates"
+              action={
+                <IconButton>
+                  <PieChartIcon />
+                </IconButton>
+              }
+            />
+            <Divider />
+            <CardContent sx={{ height: 400 }}>
+              <Pie 
+                ref={pieChartRef}
+                data={passRateData} 
+                redraw={isLoading}
+              />
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+      
+      <Card elevation={3} sx={{ mb: 3 }}>
+        <CardHeader
+          title="Course Activity Summary"
+          action={
+            <IconButton>
+              <TimelineIcon />
+            </IconButton>
+          }
+        />
+        <Divider />
+        <CardContent>
+          <TableContainer component={Paper} ref={tableRef}>
+            <Table>
+              <TableHead>
+                <TableRow sx={{ backgroundColor: 'primary.light' }}>
+                  <TableCell>Course</TableCell>
+                  <TableCell align="right">Learners</TableCell>
+                  <TableCell align="right">Completion Rate</TableCell>
+                  <TableCell align="right">Average Score</TableCell>
+                  <TableCell align="right">Last Updated</TableCell>
+                  <TableCell align="center">Status</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {activityData.map((row) => (
+                  <TableRow key={row.course}>
+                    <TableCell>{row.course}</TableCell>
+                    <TableCell align="right">{row.learners}</TableCell>
+                    <TableCell align="right">
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                        {row.completionRate}%
+                        <Box sx={{ width: '60%', ml: 1 }}>
+                          <LinearProgress 
+                            variant="determinate" 
+                            value={row.completionRate} 
+                            color={row.completionRate > 90 ? 'success' : row.completionRate > 75 ? 'primary' : 'warning'}
+                          />
+                        </Box>
+                      </Box>
+                    </TableCell>
+                    <TableCell align="right">{row.avgScore}%</TableCell>
+                    <TableCell align="right">{row.lastUpdated}</TableCell>
+                    <TableCell align="center">
+                      {row.completionRate > 90 ? (
+                        <CheckCircleIcon color="success" />
+                      ) : (
+                        <WarningIcon color={row.completionRate > 75 ? 'warning' : 'error'} />
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </CardContent>
+      </Card>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert 
+          onClose={() => setSnackbar({ ...snackbar, open: false })} 
+          severity={snackbar.severity}
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+    </Box>
+  );
+}
+
+// === File: TrainerMonitoring.jsx ===
+import React, { useState } from 'react';
+import { 
+  Box, 
+  Typography, 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableContainer, 
+  TableHead, 
+  TableRow, 
+  Paper,
+  Chip,
+  TextField,
+  InputAdornment,
+  IconButton,
+  Tooltip,
+  Pagination,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Avatar,
+  Stack,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  Rating,
+  TextareaAutosize,
+  Snackbar,
+  Alert
+} from '@mui/material';
+import { 
+  Search, 
+  Visibility, 
+  Edit, 
+  CheckCircle, 
+  Warning, 
+  Close,
+  Save
+} from '@mui/icons-material';
+
+// Sample data with observations
+const trainerData = [
+  {
+    id: 1,
+    name: 'John Smith',
+    avatar: '/avatars/1.jpg',
+    sessionsCompleted: 24,
+    complianceScore: 92,
+    lastObservation: '2023-06-15',
+    status: 'compliant',
+    qualifications: ['Level 5', 'First Aid'],
+    observations: [
+      {
+        date: '2023-06-15',
+        rating: 4.5,
+        notes: 'Excellent session delivery with strong learner engagement',
+        observer: 'QA Officer James'
+      }
+    ]
+  },
+  {
+    id: 2,
+    name: 'Sarah Johnson',
+    avatar: '/avatars/2.jpg',
+    sessionsCompleted: 18,
+    complianceScore: 85,
+    lastObservation: '2023-06-10',
+    status: 'needs_improvement',
+    qualifications: ['Level 3', 'Safeguarding'],
+    observations: [
+      {
+        date: '2023-06-10',
+        rating: 3,
+        notes: 'Needs to improve assessment feedback quality',
+        observer: 'QA Officer James'
+      }
+    ]
+  }
+];
+
+const statusMap = {
+  exemplary: { label: 'Exemplary', color: 'info', icon: <CheckCircle fontSize="small" /> },
+  compliant: { label: 'Compliant', color: 'success', icon: <CheckCircle fontSize="small" /> },
+  needs_improvement: { label: 'Needs Improvement', color: 'warning', icon: <Warning fontSize="small" /> },
+  action_required: { label: 'Action Required', color: 'error', icon: <Warning fontSize="small" /> },
+};
+
+export default function TrainerMonitoring() {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [page, setPage] = useState(1);
+  const [selectedTrainer, setSelectedTrainer] = useState(null);
+  const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
+  const [feedbackRating, setFeedbackRating] = useState(3);
+  const [feedbackNotes, setFeedbackNotes] = useState('');
+  const [projectedStatus, setProjectedStatus] = useState('compliant');
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [snackbarSeverity, setSnackbarSeverity] = useState('success');
+  const [trainers, setTrainers] = useState(trainerData);
+  const rowsPerPage = 5;
+
+  // Helper functions
+  const getStatusDescription = (status) => {
+    const descriptions = {
+      exemplary: "Trainer will be flagged as top performer",
+      compliant: "No action needed - meets all standards",
+      needs_improvement: "Will trigger improvement plan",
+      action_required: "Immediate supervisor notification"
+    };
+    return descriptions[status];
+  };
+
+  const determineStatus = (rating, notes = "") => {
+    let status;
+    if (rating >= 4.5) status = 'exemplary';
+    else if (rating >= 3.5) status = 'compliant';
+    else if (rating >= 2.5) status = 'needs_improvement';
+    else status = 'action_required';
+
+    const urgentKeywords = ['safeguarding', 'violation', 'emergency', 'immediate'];
+    const hasUrgentNote = urgentKeywords.some(keyword => 
+      notes.toLowerCase().includes(keyword)
+    );
+
+    return hasUrgentNote ? 'action_required' : status;
+  };
+
+  // Event handlers
+  const handleSubmitFeedback = () => {
+    const finalStatus = determineStatus(feedbackRating, feedbackNotes);
+    const newObservation = {
+      date: new Date().toISOString().split('T')[0],
+      rating: feedbackRating,
+      notes: feedbackNotes,
+      observer: 'Current User'
+    };
+
+    const updatedTrainers = trainers.map(trainer => 
+      trainer.id === selectedTrainer.id 
+        ? { 
+            ...trainer, 
+            status: finalStatus,
+            observations: [...trainer.observations, newObservation],
+            lastObservation: new Date().toISOString().split('T')[0],
+            complianceScore: Math.min(100, Math.max(0, feedbackRating * 20)) // Simple score calculation
+          }
+        : trainer
+    );
+
+    setTrainers(updatedTrainers);
+    setSnackbarMessage(
+      `Feedback submitted! Status updated to: ${statusMap[finalStatus].label}`
+    );
+    setSnackbarSeverity('success');
+    setSnackbarOpen(true);
+    setFeedbackDialogOpen(false);
+  };
+
+  const filteredData = trainers.filter(trainer => {
+    const matchesSearch = trainer.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === 'all' || trainer.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  const paginatedData = filteredData.slice(
+    (page - 1) * rowsPerPage,
+    page * rowsPerPage
+  );
+
+  return (
+    <Box sx={{ p: 3 }}>
+      {/* Header and Filters */}
+      <Typography variant="h5" gutterBottom sx={{ mb: 3 }}>
+        Trainer Monitoring
+      </Typography>
+      
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
+        <TextField
+          size="small"
+          placeholder="Search trainers..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          InputProps={{
+            startAdornment: <InputAdornment position="start"><Search /></InputAdornment>,
+          }}
+          sx={{ width: 300 }}
+        />
+        
+        <FormControl size="small" sx={{ width: 200 }}>
+          <InputLabel>Filter by Status</InputLabel>
+          <Select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            label="Filter by Status"
+          >
+            <MenuItem value="all">All Statuses</MenuItem>
+            {Object.keys(statusMap).map(status => (
+              <MenuItem key={status} value={status}>
+                {statusMap[status].label}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      </Box>
+      
+      {/* Main Table */}
+      <TableContainer component={Paper} elevation={3}>
+        <Table>
+          <TableHead>
+            <TableRow sx={{ backgroundColor: 'primary.light' }}>
+              <TableCell>Trainer</TableCell>
+              <TableCell align="center">Sessions</TableCell>
+              <TableCell align="center">Compliance Score</TableCell>
+              <TableCell align="center">Last Observed</TableCell>
+              <TableCell align="center">Status</TableCell>
+              <TableCell align="center">Actions</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {paginatedData.map((trainer) => (
+              <TableRow key={trainer.id}>
+                <TableCell>
+                  <Stack direction="row" alignItems="center" spacing={2}>
+                    <Avatar src={trainer.avatar} alt={trainer.name} />
+                    <Typography>{trainer.name}</Typography>
+                  </Stack>
+                </TableCell>
+                <TableCell align="center">{trainer.sessionsCompleted}</TableCell>
+                <TableCell align="center">{trainer.complianceScore}%</TableCell>
+                <TableCell align="center">{trainer.lastObservation}</TableCell>
+                <TableCell align="center">
+                  <Chip
+                    icon={statusMap[trainer.status].icon}
+                    label={statusMap[trainer.status].label}
+                    color={statusMap[trainer.status].color}
+                    variant="outlined"
+                    size="small"
+                  />
+                </TableCell>
+                <TableCell align="center">
+                  <Tooltip title="View Details">
+                    <IconButton 
+                      color="primary"
+                      onClick={() => setSelectedTrainer(trainer)}
+                    >
+                      <Visibility />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Provide Feedback">
+                    <IconButton 
+                      color="secondary"
+                      onClick={() => {
+                        setSelectedTrainer(trainer);
+                        setFeedbackRating(3);
+                        setFeedbackNotes('');
+                        setProjectedStatus(determineStatus(3));
+                        setFeedbackDialogOpen(true);
+                      }}
+                    >
+                      <Edit />
+                    </IconButton>
+                  </Tooltip>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+      
+      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+        <Pagination
+          count={Math.ceil(filteredData.length / rowsPerPage)}
+          page={page}
+          onChange={(e, newPage) => setPage(newPage)}
+          color="primary"
+        />
+      </Box>
+
+      {/* Trainer Details Dialog */}
+      <Dialog 
+        open={Boolean(selectedTrainer)} 
+        onClose={() => setSelectedTrainer(null)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          {selectedTrainer?.name}'s Details
+          <IconButton onClick={() => setSelectedTrainer(null)} sx={{ position: 'absolute', right: 8, top: 8 }}>
+            <Close />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent dividers>
+          {selectedTrainer && (
+            <Box>
+              <Stack direction="row" spacing={4} alignItems="center" mb={3}>
+                <Avatar src={selectedTrainer.avatar} sx={{ width: 80, height: 80 }} />
+                <Box>
+                  <Typography variant="h6">{selectedTrainer.name}</Typography>
+                  <Typography color="text.secondary">
+                    {selectedTrainer.qualifications.join(', ')}
+                  </Typography>
+                  <Chip
+                    icon={statusMap[selectedTrainer.status].icon}
+                    label={statusMap[selectedTrainer.status].label}
+                    color={statusMap[selectedTrainer.status].color}
+                    sx={{ mt: 1 }}
+                  />
+                </Box>
+                <Box>
+                  <Typography>Compliance: {selectedTrainer.complianceScore}%</Typography>
+                  <Typography>Sessions: {selectedTrainer.sessionsCompleted}</Typography>
+                </Box>
+              </Stack>
+
+              <Typography variant="h6" gutterBottom>Observation History</Typography>
+              <TableContainer component={Paper}>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Date</TableCell>
+                      <TableCell>Rating</TableCell>
+                      <TableCell>Observer</TableCell>
+                      <TableCell>Notes</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {selectedTrainer.observations.map((obs, index) => (
+                      <TableRow key={index}>
+                        <TableCell>{obs.date}</TableCell>
+                        <TableCell>
+                          <Rating value={obs.rating} precision={0.5} readOnly />
+                        </TableCell>
+                        <TableCell>{obs.observer}</TableCell>
+                        <TableCell>{obs.notes}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSelectedTrainer(null)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Feedback Dialog */}
+      <Dialog 
+        open={feedbackDialogOpen} 
+        onClose={() => setFeedbackDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          Feedback for {selectedTrainer?.name}
+          <IconButton onClick={() => setFeedbackDialogOpen(false)} sx={{ position: 'absolute', right: 8, top: 8 }}>
+            <Close />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent dividers>
+          <Box sx={{ mb: 3 }}>
+            <Typography gutterBottom>Rating (1-5)</Typography>
+            <Rating
+              value={feedbackRating}
+              onChange={(event, newValue) => {
+                setFeedbackRating(newValue);
+                setProjectedStatus(determineStatus(newValue, feedbackNotes));
+              }}
+              precision={0.5}
+              size="large"
+            />
+            
+            {feedbackRating && (
+              <Box sx={{ mt: 2, p: 2, bgcolor: `${statusMap[projectedStatus].color}.light`, borderRadius: 1 }}>
+                <Typography variant="body2"><strong>Status Impact:</strong></Typography>
+                <Chip
+                  label={statusMap[projectedStatus].label}
+                  color={statusMap[projectedStatus].color}
+                  sx={{ mt: 1 }}
+                />
+                <Typography variant="caption" display="block" sx={{ mt: 1 }}>
+                  {getStatusDescription(projectedStatus)}
+                </Typography>
+              </Box>
+            )}
+          </Box>
+          
+          <Box>
+            <Typography gutterBottom>Observation Notes</Typography>
+            <TextareaAutosize
+              minRows={4}
+              style={{ width: '100%', padding: '8px', fontFamily: 'inherit' }}
+              placeholder="Detailed feedback... (mention any urgent issues)"
+              value={feedbackNotes}
+              onChange={(e) => {
+                setFeedbackNotes(e.target.value);
+                setProjectedStatus(determineStatus(feedbackRating, e.target.value));
+              }}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setFeedbackDialogOpen(false)}>Cancel</Button>
+          <Button 
+            onClick={handleSubmitFeedback}
+            variant="contained"
+            color="primary"
+            startIcon={<Save />}
+          >
+            Submit Feedback
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Snackbar Notification */}
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={6000}
+        onClose={() => setSnackbarOpen(false)}
+        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        <Alert 
+          onClose={() => setSnackbarOpen(false)} 
+          severity={snackbarSeverity}
+          sx={{ width: '100%' }}
+        >
+          {snackbarMessage}
+        </Alert>
+      </Snackbar>
+    </Box>
+  );
+}

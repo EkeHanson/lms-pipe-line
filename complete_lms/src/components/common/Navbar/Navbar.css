@@ -1,0 +1,11 @@
+/* Navbar.css */
+.logo-link {
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    align-items: center;
+  }
+  
+  .logo-link img {
+    max-height: 50px;
+  }

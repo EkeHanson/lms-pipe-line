@@ -1,0 +1,13 @@
+firstName,lastName,email,password,role
+Adama,Bello,adama.bello@example.com,Password123!,owner
+Aissatou,Ba,aissatou.ba@example.com,Password123!,learner
+Moussa,Diallo,moussa.diallo@example.com,Password123!,instructor
+Fatoumata,Sow,fatoumata.sow@example.com,Password123!,learner
+Ousmane,Barry,ousmane.barry@example.com,Password123!,admin
+Mariama,Touré,mariama.toure@example.com,Password123!,owner
+Seynabou,Bah,seynabou.bah@example.com,Password123!,learner
+Abdoulaye,Diouf,abdoulaye.diouf@example.com,Password123!,instructor
+Yero,Camara,yero.camara@example.com,Password123!,learner
+Hawa,Dramé,hawa.drame@example.com,Password123!,admin
+Lamine,Sidibé,lamine.sidibe@example.com,Password123!,owner
+Khadija,Kouyaté,khadija.kouyate@example.com,Password123!,learner
